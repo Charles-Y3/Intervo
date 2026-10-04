@@ -3,6 +3,7 @@ import { cueFor } from '../engine/cues';
 import { createWakeLock, performCue, stopSpeaking } from '../engine/device';
 import { buildSteps, formatClock, formatShort } from '../engine/plan';
 import { Runner } from '../engine/runner';
+import { LIMITS } from '../engine/types';
 import type { RunEvent, RunResult, Routine, Settings } from '../engine/types';
 import { S } from '../strings';
 import { Sheet } from './Sheet';
@@ -24,6 +25,8 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
   const [muted, setMuted] = useState(false);
   const [, setFrame] = useState(0);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  // Reps the user will log for the current reps set; resets for every new step.
+  const [adj, setAdj] = useState<{ idx: number; n: number } | null>(null);
   const runnerRef = useRef<Runner | null>(null);
   const settingsRef = useRef(settings);
   const mutedRef = useRef(muted);
@@ -78,8 +81,13 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
   const sec = runner.remainingSec();
   const phase = step.kind === 'roundRest' ? 'rest' : step.kind;
   const next = steps[runner.index + 1];
-  const leftTotal =
-    steps.slice(runner.index + 1).reduce((a, s) => a + s.durationSec, 0) + runner.remainingMs() / 1000;
+  const untimed = runner.untimed;
+  // A reps set has no countdown: count what is left of its estimate (never below 0).
+  const currentLeft = untimed ? Math.max(0, step.durationSec - runner.elapsedSec()) : runner.remainingMs() / 1000;
+  const leftTotal = steps.slice(runner.index + 1).reduce((a, s) => a + s.durationSec, 0) + currentLeft;
+  const anyReps = steps.some((s) => s.reps !== undefined);
+  const repsNow = untimed ? (adj && adj.idx === runner.index ? adj.n : (step.reps ?? 0)) : 0;
+  const setReps = (n: number) => setAdj({ idx: runner.index, n: Math.min(LIMITS.maxReps, Math.max(0, n)) });
   const workSteps = steps.filter((s) => s.kind === 'work');
   const currentWorkNo = steps.slice(0, runner.index + 1).filter((s) => s.kind === 'work').length;
   const phaseName = phase === 'prep' ? S.prep : phase === 'work' ? S.workPhase : S.restPhase;
@@ -99,6 +107,25 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
       <div className="runPhase">{phaseName}</div>
       <div className="runName">{displayName}</div>
 
+      {untimed ? (
+        <div className="repsPanel" data-testid="reps-panel">
+          <div className="repsBig" data-testid="reps-now" aria-live="polite">
+            {repsNow}
+          </div>
+          <div className="repsUnit">{S.repsUnit}</div>
+          <div className="repsAdjust">
+            <button className="roundBtn" onClick={() => setReps(repsNow - 1)} aria-label={S.repsMinus}>
+              −
+            </button>
+            <span className="repsClock" data-testid="reps-clock" aria-label={S.repsSetTime}>
+              {formatClock(Math.floor(runner.elapsedSec()))}
+            </span>
+            <button className="roundBtn" onClick={() => setReps(repsNow + 1)} aria-label={S.repsPlus}>
+              +
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="ringWrap">
         <svg className="ring" viewBox="0 0 200 200" aria-hidden="true">
           <circle className="ringTrack" cx="100" cy="100" r={R} />
@@ -115,6 +142,7 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
           {sec >= 600 ? formatClock(sec) : String(sec)}
         </div>
       </div>
+      )}
 
       <div className="runNext">
         {next ? (
@@ -143,6 +171,11 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
         </button>
       </div>
       <div className="runExtra">
+        {untimed && (
+          <button className="btn btnDone" onClick={() => act(runner.completeSet(repsNow))}>
+            {S.done}
+          </button>
+        )}
         {phase === 'rest' && (
           <button className="btn btnGhost" onClick={() => runner.addTime(10)}>
             {S.addTen}
@@ -155,7 +188,7 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
           {muted ? S.soundSilent : settings.sound === 'voice' ? S.soundVoice : settings.sound === 'beeps' ? S.soundBeeps : S.soundSilent}
         </button>
         <span className="runLeft">
-          {S.timeLeft} {formatClock(leftTotal)}
+          {S.timeLeft} {anyReps ? '≈ ' : ''}{formatClock(leftTotal)}
         </span>
         <button className="btn btnGhost" onClick={() => setConfirmEnd(true)}>
           {S.end}

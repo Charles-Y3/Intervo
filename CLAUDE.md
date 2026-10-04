@@ -4,7 +4,7 @@ Interval timer PWA for exercise (work / rest / rounds, voice or silent). English
 
 ## Layout
 - `src/engine/` pure logic, unit tested (`engine.test.ts`): `voices.ts` (guess voice gender from name, pick a voice), `history.ts` (workout log: build/sanitize entries, filters, chart buckets), `plan.ts` (routine -> step list), `runner.ts` (clock-driven state machine), `cues.ts` (event -> speech/beep/vibrate), `storage.ts` (sanitizers + localStorage), `timeEntry.ts`, `device.ts` (audio, speech, vibrate, wake lock).
-- `src/components/` screens: Setup, Running, Finish, History (+ BarChart, hand-drawn SVG), SettingsSheet, TimeField (+ NumberPad), Sheet, ConfirmSheet, UpdatePrompt.
+- `src/components/` screens: Setup, Running, Finish, RepsField (+ KindToggle), History (+ BarChart, hand-drawn SVG), SettingsSheet, TimeField (+ NumberPad), Sheet, ConfirmSheet, UpdatePrompt.
 - `src/strings.ts` every user-visible string (no literals in JSX).
 - `e2e/` Playwright against the production build (`npm run test:e2e` builds and serves on :4175).
 
@@ -15,6 +15,7 @@ Interval timer PWA for exercise (work / rest / rounds, voice or silent). English
 - Browsers expose no voice gender: `voices.ts` infers it from the voice name/URI and the settings sheet also offers an exact English voice list. Counting every second is voice-mode only, work steps only, and skips the first 2 s of a step so it does not cut off the exercise announcement.
 - EVERY delete (saved routine, exercise, logged workout, clear history) must go through `ConfirmSheet`. Never add a delete that acts on the first tap.
 - The log (`intervo:history`, max 1000) records finished AND ended-early workouts from `Runner.result()` (per-step seconds actually done; skips/back never lose seconds). Under 3 s of work is not logged. Dates are local time; weeks start Monday.
+- Exercises are Timed (countdown) or Reps (`kind: 'reps'`, target `reps`). A reps set is an UNTIMED step: no countdown/3-2-1/halfway, it ends only when the user taps Done (`Runner.completeSet(reps)`) or skips (0 reps, not complete). Its `durationSec` is just `reps x 3 s` for the setup total, shown with "≈". Logged per exercise: reps, bestReps, sets, workSec.
 - Quick mode is a Routine with exactly one exercise; one engine for both modes.
 - The service worker uses `registerType: 'prompt'` so an update never swaps in mid-workout.
 - No network calls. Keep `connect-src 'self'` in `vercel.json`.

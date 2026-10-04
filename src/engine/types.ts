@@ -1,7 +1,14 @@
+export type ExerciseKind = 'timed' | 'reps';
+
 export interface Exercise {
   id: string;
   name: string;
+  /** Timed: the countdown length. Reps: unused (kept valid so switching kind is lossless). */
   workSec: number;
+  /** Undefined means timed. */
+  kind?: ExerciseKind;
+  /** Target reps per set (reps exercises). */
+  reps?: number;
 }
 
 /** One workout. Quick mode is a Routine with a single exercise. */
@@ -26,6 +33,9 @@ export interface Step {
   round: number;
   /** 0-based exercise index for work steps, -1 otherwise. */
   exerciseIndex: number;
+  /** Target reps. Present = an untimed set that ends when the user taps Done;
+   * durationSec is then only an estimate for the "total" line. */
+  reps?: number;
 }
 
 export type SoundMode = 'voice' | 'beeps' | 'silent';
@@ -63,10 +73,22 @@ export const LIMITS = {
   maxNameLength: 40,
   maxSavedRoutines: 50,
   maxHistory: 1000,
+  maxReps: 999,
 } as const;
 
 /** What a run actually completed (for the workout log). */
 export interface RunResult {
-  work: { name: string; round: number; plannedSec: number; sec: number; complete: boolean }[];
+  work: {
+    name: string;
+    round: number;
+    /** Countdown length (0 for reps sets). */
+    plannedSec: number;
+    /** Seconds actually spent. */
+    sec: number;
+    complete: boolean;
+    /** Reps sets: target and reps the user confirmed (0 if skipped). 0/0 for timed. */
+    targetReps: number;
+    reps: number;
+  }[];
   roundsDone: number;
 }

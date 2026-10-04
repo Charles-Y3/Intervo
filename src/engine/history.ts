@@ -13,8 +13,12 @@ export interface ExerciseStat {
   sets: number;
   /** Seconds of work actually done (partial sets count). */
   workSec: number;
-  /** Length of the longest completed set, in seconds. */
+  /** Length of the longest completed timed set, in seconds. */
   longestSec: number;
+  /** Reps confirmed across all sets (rep exercises; 0 for timed). */
+  reps: number;
+  /** Most reps in a single set. */
+  bestReps: number;
 }
 
 export interface HistoryEntry {
@@ -38,11 +42,15 @@ export function buildEntry(routine: Routine, result: RunResult, totalSec: number
   const byName = new Map<string, ExerciseStat>();
   for (const w of result.work) {
     const k = key(w.name);
-    const stat = byName.get(k) ?? { name: w.name, sets: 0, workSec: 0, longestSec: 0 };
+    const stat = byName.get(k) ?? { name: w.name, sets: 0, workSec: 0, longestSec: 0, reps: 0, bestReps: 0 };
     stat.workSec += w.sec;
     if (w.complete) {
       stat.sets += 1;
       stat.longestSec = Math.max(stat.longestSec, w.plannedSec);
+    }
+    if (w.targetReps > 0) {
+      stat.reps += w.reps;
+      stat.bestReps = Math.max(stat.bestReps, w.reps);
     }
     byName.set(k, stat);
   }
@@ -59,6 +67,11 @@ export function buildEntry(routine: Routine, result: RunResult, totalSec: number
     completed,
     exercises,
   };
+}
+
+/** Does any entry contain rep-based sets? Decides whether the rep metrics are offered. */
+export function hasRepData(entries: HistoryEntry[]): boolean {
+  return entries.some((e) => e.exercises.some((s) => s.reps > 0));
 }
 
 /** Worth logging? Ignores accidental starts (under 3 s of work). */
@@ -79,6 +92,8 @@ function sanitizeStat(v: unknown, i: number): ExerciseStat {
     sets: clampInt(o.sets, 0, 9999, 0),
     workSec: clampInt(o.workSec, 0, 999999, 0),
     longestSec: clampInt(o.longestSec, 0, LIMITS.maxSeconds, 0),
+    reps: clampInt(o.reps, 0, 999999, 0),
+    bestReps: clampInt(o.bestReps, 0, LIMITS.maxReps, 0),
   };
 }
 
@@ -176,13 +191,15 @@ export function exerciseNames(entries: HistoryEntry[]): string[] {
 }
 
 /** The numbers an entry contributes: just the chosen exercise, or everything. */
-export function statsFor(e: HistoryEntry, exercise: string): { workSec: number; sets: number; longestSec: number } {
+export function statsFor(e: HistoryEntry, exercise: string): { workSec: number; sets: number; longestSec: number; reps: number; bestReps: number } {
   const ex = key(exercise);
   const list = ex ? e.exercises.filter((s) => key(s.name) === ex) : e.exercises;
   return {
     workSec: list.reduce((a, s) => a + s.workSec, 0),
     sets: list.reduce((a, s) => a + s.sets, 0),
     longestSec: list.reduce((a, s) => Math.max(a, s.longestSec), 0),
+    reps: list.reduce((a, s) => a + s.reps, 0),
+    bestReps: list.reduce((a, s) => Math.max(a, s.bestReps), 0),
   };
 }
 
@@ -190,23 +207,26 @@ export interface Summary {
   sessions: number;
   workSec: number;
   sets: number;
+  reps: number;
 }
 
 export function summarize(entries: HistoryEntry[], exercise: string): Summary {
   let workSec = 0;
   let sets = 0;
+  let reps = 0;
   for (const e of entries) {
     const s = statsFor(e, exercise);
     workSec += s.workSec;
     sets += s.sets;
+    reps += s.reps;
   }
-  return { sessions: entries.length, workSec, sets };
+  return { sessions: entries.length, workSec, sets, reps };
 }
 
 // ---- chart data ----
 
 export type Group = 'day' | 'week' | 'month';
-export type Metric = 'time' | 'sets' | 'longest' | 'sessions';
+export type Metric = 'time' | 'sets' | 'longest' | 'sessions' | 'reps' | 'bestReps';
 
 export interface Bucket {
   /** Sort/ID key: YYYY-MM-DD (day, week start) or YYYY-MM. */
@@ -256,6 +276,8 @@ export function bucketize(entries: HistoryEntry[], f: Filters, group: Group, met
     if (metric === 'time') map.set(k, cur + s.workSec);
     else if (metric === 'sets') map.set(k, cur + s.sets);
     else if (metric === 'sessions') map.set(k, cur + 1);
+    else if (metric === 'reps') map.set(k, cur + s.reps);
+    else if (metric === 'bestReps') map.set(k, Math.max(cur, s.bestReps));
     else map.set(k, Math.max(cur, s.longestSec));
   }
 

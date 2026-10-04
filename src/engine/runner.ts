@@ -13,6 +13,9 @@ export class Runner {
   private halfwayFired = false;
   /** Most seconds ever completed in each step (survives skip/back). */
   private best: number[];
+  /** Reps confirmed with Done, per step (0 = not done). */
+  private repsDone: number[];
+  private setDone: boolean[];
 
   constructor(
     readonly steps: Step[],
@@ -21,6 +24,13 @@ export class Runner {
     private readonly everySecondOnWork = false,
   ) {
     this.best = steps.map(() => 0);
+    this.repsDone = steps.map(() => 0);
+    this.setDone = steps.map(() => false);
+  }
+
+  /** The current step has no countdown: it ends when the user taps Done. */
+  get untimed(): boolean {
+    return this.step.reps !== undefined;
   }
 
   get paused(): boolean {
@@ -36,13 +46,22 @@ export class Runner {
     this.done = false;
     this.pausedAt = null;
     this.best = this.steps.map(() => 0);
+    this.repsDone = this.steps.map(() => 0);
+    this.setDone = this.steps.map(() => false);
     this.enter(0, this.now());
     return [{ type: 'stepStart', index: 0 }];
   }
 
   remainingMs(): number {
+    if (this.untimed) return Infinity;
     const at = this.pausedAt ?? this.now();
     return this.step.durationSec * 1000 + this.extraMs - (at - this.startedAt);
+  }
+
+  /** Seconds spent in the current step so far (the count-up clock of a reps set). */
+  elapsedSec(): number {
+    const at = this.pausedAt ?? this.now();
+    return Math.max(0, (at - this.startedAt) / 1000);
   }
 
   /** Whole seconds left, rounded up (what the big number shows). */
@@ -52,6 +71,7 @@ export class Runner {
 
   /** 0..1 of the current step already used. */
   progress(): number {
+    if (this.untimed) return 0;
     const total = this.step.durationSec * 1000 + this.extraMs;
     return total <= 0 ? 1 : Math.min(1, Math.max(0, 1 - this.remainingMs() / total));
   }
@@ -78,8 +98,19 @@ export class Runner {
   /** Restart the current step if it has run >2 s, else go to the previous one. */
   back(): RunEvent[] {
     if (this.done) return [];
-    const elapsed = this.step.durationSec * 1000 + this.extraMs - this.remainingMs();
+    const elapsed = this.elapsedSec() * 1000;
     this.goto(elapsed > 2000 || this.index === 0 ? this.index : this.index - 1);
+    return [{ type: 'stepStart', index: this.index }];
+  }
+
+  /** User tapped Done on a reps set: log the reps and move on (or finish). */
+  completeSet(reps: number): RunEvent[] {
+    if (this.done || !this.untimed) return [];
+    this.snap();
+    this.repsDone[this.index] = Math.max(0, Math.round(reps));
+    this.setDone[this.index] = true;
+    if (this.index >= this.steps.length - 1) return this.finish();
+    this.goto(this.index + 1);
     return [{ type: 'stepStart', index: this.index }];
   }
 
@@ -103,6 +134,7 @@ export class Runner {
     }
     // Only the step we landed in is announced; steps skipped by a freeze stay silent.
     if (entered) events.push({ type: 'stepStart', index: this.index });
+    if (this.untimed) return events; // reps sets have no countdown, 3-2-1 or halfway
 
     const sec = this.remainingSec();
     const total = this.step.durationSec + this.extraMs / 1000;
@@ -122,7 +154,8 @@ export class Runner {
   /** Seconds done so far in the current step, capped at its length. */
   private snap(): void {
     const at = this.pausedAt ?? this.now();
-    const secs = Math.min(this.step.durationSec, Math.max(0, (at - this.startedAt) / 1000));
+    const cap = this.untimed ? Infinity : this.step.durationSec;
+    const secs = Math.min(cap, Math.max(0, (at - this.startedAt) / 1000));
     this.best[this.index] = Math.max(this.best[this.index], secs);
   }
 
@@ -135,9 +168,11 @@ export class Runner {
       .map(({ st, i }) => ({
         name: st.label,
         round: st.round,
-        plannedSec: st.durationSec,
+        plannedSec: st.reps !== undefined ? 0 : st.durationSec,
         sec: Math.round(this.best[i] * 10) / 10,
-        complete: this.best[i] >= st.durationSec - 0.05,
+        complete: st.reps !== undefined ? this.setDone[i] : this.best[i] >= st.durationSec - 0.05,
+        targetReps: st.reps ?? 0,
+        reps: st.reps !== undefined ? this.repsDone[i] : 0,
       }));
     const rounds = new Map<number, boolean>();
     for (const w of work) rounds.set(w.round, (rounds.get(w.round) ?? true) && w.complete);
@@ -146,7 +181,7 @@ export class Runner {
 
   private finish(): RunEvent[] {
     if (this.index >= this.steps.length - 1) {
-      if (this.remainingMs() <= 0) this.best[this.index] = this.step.durationSec;
+      if (!this.untimed && this.remainingMs() <= 0) this.best[this.index] = this.step.durationSec;
       else this.snap();
     }
     this.done = true;

@@ -153,7 +153,7 @@ describe('dates', () => {
 
 const at = (y: number, m: number, d: number, h = 9) => new Date(y, m - 1, d, h).getTime();
 function entry(id: string, when: number, routineName: string, exercises: [string, number, number, number][], over: Partial<HistoryEntry> = {}): HistoryEntry {
-  const ex = exercises.map(([name, sets, workSec, longestSec]) => ({ name, sets, workSec, longestSec }));
+  const ex = exercises.map(([name, sets, workSec, longestSec]) => ({ name, sets, workSec, longestSec, reps: 0, bestReps: 0 }));
   return {
     id,
     at: when,
@@ -200,8 +200,8 @@ describe('filters', () => {
 
 describe('summary uses only the chosen exercise', () => {
   it('all vs one exercise', () => {
-    expect(summarize(sample, '')).toEqual({ sessions: 4, workSec: 90 + 90 + 120 + 135 + 135 + 180, sets: 18 });
-    expect(summarize(filterEntries(sample, { ...NO_FILTERS, exercise: 'Squats' }), 'Squats')).toEqual({ sessions: 2, workSec: 225, sets: 6 });
+    expect(summarize(sample, '')).toEqual({ sessions: 4, workSec: 90 + 90 + 120 + 135 + 135 + 180, sets: 18, reps: 0 });
+    expect(summarize(filterEntries(sample, { ...NO_FILTERS, exercise: 'Squats' }), 'Squats')).toEqual({ sessions: 2, workSec: 225, sets: 6, reps: 0 });
   });
 });
 

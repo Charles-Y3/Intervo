@@ -614,6 +614,77 @@ button {
   font-size: var(--step-1);
 }
 
+/* Reps */
+.repsInput {
+  width: 84px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.kindCompact {
+  margin-right: auto;
+  gap: var(--space-1);
+}
+
+.kindCompact .chip {
+  min-height: 40px;
+  min-width: 0;
+  padding: 0 var(--space-2);
+  font-size: var(--step--1);
+}
+
+.repsPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: min(70vw, 42dvh, 320px);
+  justify-content: center;
+}
+
+.repsBig {
+  font-size: min(30vw, 16dvh, 7rem);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.repsUnit {
+  font-size: var(--step-1);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.repsAdjust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.repsAdjust .roundBtn {
+  width: 56px;
+  height: 56px;
+  font-size: 1.75rem;
+}
+
+.repsClock {
+  font-size: var(--step-1);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.btnDone {
+  min-height: 72px;
+  min-width: 220px;
+  font-size: var(--step-1);
+  background: #fff;
+  color: #1c1b19;
+  border-color: #fff;
+}
+
 /* Confirm + history */
 .confirmText {
   margin: 0;
@@ -628,6 +699,10 @@ button {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-2);
+}
+
+.stats4 {
+  grid-template-columns: repeat(4, 1fr);
 }
 
 .stats3 .stat {

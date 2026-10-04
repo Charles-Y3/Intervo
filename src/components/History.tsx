@@ -4,6 +4,7 @@ import {
   defaultGroup,
   exerciseNames,
   filterEntries,
+  hasRepData,
   parseDay,
   rangeFor,
   routineNames,
@@ -52,11 +53,13 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
   const dirty = routine !== '' || exercise !== '' || preset !== '30';
 
   const format = (v: number) => (metric === 'time' || metric === 'longest' ? formatShort(v) : String(Math.round(v)));
+  const repData = hasRepData(entries);
   const metrics: [Metric, string][] = [
     ['time', S.metricTime],
     ['sets', S.metricSets],
     ['longest', S.metricLongest],
     ['sessions', S.metricSessions],
+    ...(repData ? ([['reps', S.metricReps], ['bestReps', S.metricBestReps]] as [Metric, string][]) : []),
   ];
   const presets: [RangePreset, string][] = [
     ['7', S.last7],
@@ -86,7 +89,7 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
         </p>
       ) : (
         <>
-          <div className="stats3">
+          <div className={sum.reps > 0 ? 'stats3 stats4' : 'stats3'}>
             <div className="stat">
               <span className="muted">{S.statWorkouts}</span>
               <strong data-testid="stat-workouts">{sum.sessions}</strong>
@@ -99,6 +102,12 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
               <span className="muted">{S.statSets}</span>
               <strong>{sum.sets}</strong>
             </div>
+            {sum.reps > 0 && (
+              <div className="stat">
+                <span className="muted">{S.statReps}</span>
+                <strong data-testid="stat-reps">{sum.reps}</strong>
+              </div>
+            )}
           </div>
 
           <section className="field" aria-label={S.filters}>
@@ -233,7 +242,11 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
                     <p className="histEx">
                       {e.exercises
                         .filter((s) => !exercise || s.name.toLowerCase() === exercise.toLowerCase())
-                        .map((s) => `${s.name} ×${s.sets}${s.longestSec ? ` (${formatShort(s.longestSec)})` : ''}`)
+                        .map((s) =>
+                          s.reps > 0
+                            ? `${s.name} ${s.reps} ${S.repsUnit} · ${s.sets} sets (best ${s.bestReps})`
+                            : `${s.name} ×${s.sets}${s.longestSec ? ` (${formatShort(s.longestSec)})` : ''}`,
+                        )
                         .join(' · ')}
                     </p>
                     <button className="btn btnSmall" onClick={() => setConfirm({ kind: 'one', entry: e })} aria-label={`${S.deleteWorkout}: ${e.routineName}`}>

@@ -4,6 +4,9 @@ import type { Routine, Step } from './types';
  * Rules: optional get-ready first; a short rest between exercises inside a
  * round; a longer rest between rounds; never a rest after the very last
  * work step. A rest of 0 seconds is skipped entirely. */
+/** Rough seconds per rep, only used for the "total" estimate of rep sets. */
+export const SEC_PER_REP_ESTIMATE = 3;
+
 export function buildSteps(r: Routine): Step[] {
   const steps: Step[] = [];
   if (r.prepSec > 0) {
@@ -12,7 +15,12 @@ export function buildSteps(r: Routine): Step[] {
   const lastExercise = r.exercises.length - 1;
   for (let round = 1; round <= r.rounds; round++) {
     r.exercises.forEach((ex, i) => {
-      steps.push({ kind: 'work', durationSec: ex.workSec, label: ex.name, round, exerciseIndex: i });
+      if (ex.kind === 'reps') {
+        const reps = ex.reps ?? 10;
+        steps.push({ kind: 'work', durationSec: reps * SEC_PER_REP_ESTIMATE, label: ex.name, round, exerciseIndex: i, reps });
+      } else {
+        steps.push({ kind: 'work', durationSec: ex.workSec, label: ex.name, round, exerciseIndex: i });
+      }
       if (i < lastExercise) {
         if (r.restBetweenExercisesSec > 0) {
           steps.push({ kind: 'rest', durationSec: r.restBetweenExercisesSec, label: 'Rest', round, exerciseIndex: -1 });
@@ -23,6 +31,10 @@ export function buildSteps(r: Routine): Step[] {
     });
   }
   return steps;
+}
+
+export function hasRepSets(steps: Step[]): boolean {
+  return steps.some((s) => s.reps !== undefined);
 }
 
 export function totalSeconds(steps: Step[]): number {

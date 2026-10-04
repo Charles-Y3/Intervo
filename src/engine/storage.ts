@@ -77,6 +77,8 @@ function sanitizeExercise(v: unknown, i: number): Exercise {
     id: typeof o.id === 'string' && o.id.length > 0 && o.id.length <= 40 ? o.id : newId(),
     name: cleanName(o.name, `Exercise ${i + 1}`),
     workSec: clampInt(o.workSec, 1, LIMITS.maxSeconds, 30),
+    kind: o.kind === 'reps' ? 'reps' : 'timed',
+    reps: clampInt(o.reps, 1, LIMITS.maxReps, 10),
   };
 }
 

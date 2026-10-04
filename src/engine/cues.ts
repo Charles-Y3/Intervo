@@ -54,8 +54,9 @@ function rawCue(ev: RunEvent, steps: Step[], settings: Settings): Cue | null {
         }
         case 'work': {
           const firstOfRound = step.exerciseIndex === 0 && step.round > 1 && multiRound;
+          const what = step.reps !== undefined ? `${step.label}. ${step.reps} ${step.reps === 1 ? 'rep' : 'reps'}` : step.label;
           return {
-            speech: firstOfRound ? `Round ${step.round}. ${step.label}. Go` : `${step.label}. Go`,
+            speech: firstOfRound ? `Round ${step.round}. ${what}. Go` : `${what}. Go`,
             beep: 'go',
             vibrate: [250],
           };

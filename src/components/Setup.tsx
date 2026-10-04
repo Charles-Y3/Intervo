@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { buildSteps, formatClock, formatShort, totalSeconds } from '../engine/plan';
+import { buildSteps, formatClock, formatShort, hasRepSets, totalSeconds } from '../engine/plan';
 import { cleanName, newId } from '../engine/storage';
 import type { AppState, Mode } from '../engine/storage';
 import { LIMITS } from '../engine/types';
 import type { Exercise, Routine } from '../engine/types';
 import { S } from '../strings';
 import { ConfirmSheet } from './ConfirmSheet';
+import { KindToggle, RepsField, RepsInput } from './RepsField';
 import { NumberPad, TimeField } from './TimeField';
 
 interface Props {
@@ -27,7 +28,10 @@ export function Setup({ state, saved, onState, onStart, onSave, onDeleteSaved }:
   const r = mode === 'quick' ? state.quick : state.routine;
   const patch = (p: Partial<Routine>) => onState({ ...state, [mode]: { ...r, ...p } });
   const setMode = (m: Mode) => onState({ ...state, mode: m });
-  const total = totalSeconds(buildSteps(r));
+  const steps = buildSteps(r);
+  const total = totalSeconds(steps);
+  const estimated = hasRepSets(steps);
+  const q0 = r.exercises[0];
   const [justSaved, setJustSaved] = useState(false);
   const [deleteSaved, setDeleteSaved] = useState<Routine | null>(null);
 
@@ -54,13 +58,21 @@ export function Setup({ state, saved, onState, onStart, onSave, onDeleteSaved }:
               onBlur={(e) => patch({ exercises: [{ ...r.exercises[0], name: cleanName(e.target.value, 'Work') }] })}
             />
           </label>
-          <TimeField
-            label={S.work}
-            big
-            value={r.exercises[0].workSec}
-            presets={WORK_PRESETS}
-            onChange={(sec) => patch({ exercises: [{ ...r.exercises[0], workSec: sec }] })}
-          />
+          <div className="field">
+            <div className="fieldLabel">{S.exerciseType}</div>
+            <KindToggle value={q0.kind ?? 'timed'} onChange={(kind) => patch({ exercises: [{ ...q0, kind }] })} />
+          </div>
+          {q0.kind === 'reps' ? (
+            <RepsField value={q0.reps ?? 10} onChange={(reps) => patch({ exercises: [{ ...q0, reps }] })} />
+          ) : (
+            <TimeField
+              label={S.work}
+              big
+              value={q0.workSec}
+              presets={WORK_PRESETS}
+              onChange={(sec) => patch({ exercises: [{ ...q0, workSec: sec }] })}
+            />
+          )}
         </>
       ) : (
         <ExerciseList exercises={r.exercises} onChange={(exercises) => patch({ exercises })} />
@@ -166,7 +178,7 @@ export function Setup({ state, saved, onState, onStart, onSave, onDeleteSaved }:
 
       <div className="startBar">
         <div className="startTotal">
-          <span className="muted">{S.total}</span> <strong>{formatClock(total)}</strong>
+          <span className="muted">{estimated ? S.totalEstimate : S.total}</span> <strong>{estimated ? '≈ ' : ''}{formatClock(total)}</strong>
         </div>
         <button className="btn btnPrimary btnStart" onClick={() => onStart(r)}>
           {mode === 'quick' ? S.start : S.startRoutine}
@@ -205,10 +217,15 @@ function ExerciseList({ exercises, onChange }: { exercises: Exercise[]; onChange
               onChange={(e) => update(ex.id, { name: e.target.value })}
               onBlur={(e) => update(ex.id, { name: cleanName(e.target.value, `Exercise ${i + 1}`) })}
             />
-            <button className="btn exTime" onClick={() => setPadFor(ex.id)} aria-label={`${ex.name}: ${formatShort(ex.workSec)}. ${S.enterTime}`}>
-              {formatShort(ex.workSec)}
-            </button>
+            {ex.kind === 'reps' ? (
+              <RepsInput className="exTime" value={ex.reps ?? 10} label={`${ex.name}: ${S.repsTyped}`} onChange={(reps) => update(ex.id, { reps })} />
+            ) : (
+              <button className="btn exTime" onClick={() => setPadFor(ex.id)} aria-label={`${ex.name}: ${formatShort(ex.workSec)}. ${S.enterTime}`}>
+                {formatShort(ex.workSec)}
+              </button>
+            )}
             <div className="exActions">
+              <KindToggle compact value={ex.kind ?? 'timed'} onChange={(kind) => update(ex.id, { kind })} />
               <button className="iconBtn" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`${S.moveUp}: ${ex.name}`}>
                 ↑
               </button>
