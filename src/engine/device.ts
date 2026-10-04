@@ -1,5 +1,6 @@
 import type { Beep, Cue } from './cues';
-import type { Settings } from './types';
+import type { Settings, VoicePref } from './types';
+import { pickVoice } from './voices';
 
 /** Phone hardware: beeps, speech, vibration, screen wake lock. Every call is
  * best-effort and swallows errors, so an unsupported feature never breaks a
@@ -52,12 +53,23 @@ export function playBeep(kind: Beep): void {
   }
 }
 
+let voicePref: VoicePref = 'auto';
+let voiceName = '';
+
+/** Set from the app whenever the voice settings change. */
+export function setVoicePreference(pref: VoicePref, name: string): void {
+  voicePref = pref;
+  voiceName = name;
+}
+
 export function speak(text: string, volume = 1): void {
   try {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US';
+    const voice = pickVoice(window.speechSynthesis.getVoices(), voicePref, voiceName);
+    if (voice) u.voice = voice;
+    u.lang = voice?.lang ?? 'en-US';
     u.rate = 1.05;
     u.volume = volume;
     window.speechSynthesis.speak(u);

@@ -1,5 +1,5 @@
 import { LIMITS } from './types';
-import type { Exercise, Routine, Settings, SoundMode, ThemeChoice } from './types';
+import type { CountMode, Exercise, Routine, Settings, SoundMode, ThemeChoice, VoicePref } from './types';
 
 /** Everything read from localStorage is untrusted (old versions, edited by
  * hand, another tab). Each sanitizer clamps or replaces bad values with
@@ -11,6 +11,9 @@ export const DEFAULT_SETTINGS: Settings = {
   halfway: false,
   sides: false,
   theme: 'auto',
+  countAloud: 'last3',
+  voicePref: 'auto',
+  voiceName: '',
 };
 
 let idCounter = 0;
@@ -53,11 +56,15 @@ export function clampInt(v: unknown, min: number, max: number, fallback: number)
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-export function cleanName(v: unknown, fallback: string): string {
+export function cleanText(v: unknown, fallback: string, max: number): string {
   if (typeof v !== 'string') return fallback;
   // eslint-disable-next-line no-control-regex
-  const s = v.replace(/[\u0000-\u001f\u007f‪-‮⁦-⁩]/g, '').trim().slice(0, LIMITS.maxNameLength);
+  const s = v.replace(/[\u0000-\u001f\u007f‪-‮⁦-⁩]/g, '').trim().slice(0, max);
   return s === '' ? fallback : s;
+}
+
+export function cleanName(v: unknown, fallback: string): string {
+  return cleanText(v, fallback, LIMITS.maxNameLength);
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -90,6 +97,8 @@ export function sanitizeRoutine(v: unknown, fallback: Routine): Routine {
 
 const SOUNDS: SoundMode[] = ['voice', 'beeps', 'silent'];
 const THEMES: ThemeChoice[] = ['auto', 'light', 'dark'];
+const COUNTS: CountMode[] = ['last3', 'every'];
+const VOICE_PREFS: VoicePref[] = ['auto', 'female', 'male'];
 
 export function sanitizeSettings(v: unknown): Settings {
   const o = isRecord(v) ? v : {};
@@ -99,6 +108,9 @@ export function sanitizeSettings(v: unknown): Settings {
     halfway: o.halfway === true,
     sides: o.sides === true,
     theme: THEMES.includes(o.theme as ThemeChoice) ? (o.theme as ThemeChoice) : DEFAULT_SETTINGS.theme,
+    countAloud: COUNTS.includes(o.countAloud as CountMode) ? (o.countAloud as CountMode) : DEFAULT_SETTINGS.countAloud,
+    voicePref: VOICE_PREFS.includes(o.voicePref as VoicePref) ? (o.voicePref as VoicePref) : DEFAULT_SETTINGS.voicePref,
+    voiceName: typeof o.voiceName === 'string' ? cleanText(o.voiceName, '', 120) : '',
   };
 }
 

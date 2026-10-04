@@ -10,6 +10,7 @@ import {
   sanitizeSaved,
   sanitizeSettings,
 } from './storage';
+import { englishVoices, genderOf, pickVoice } from './voices';
 import { digitsToSeconds, popDigit, pushDigit, secondsToDigits } from './timeEntry';
 import type { Routine, Settings } from './types';
 
@@ -191,7 +192,7 @@ describe('cueFor', () => {
     expect(cueFor({ type: 'halfway' }, steps, s({ halfway: true, sides: true }))?.speech).toBe('Switch sides');
   });
   it('vibration works with sound silent', () => {
-    expect(cueFor({ type: 'countdown', sec: 2 }, steps, s({ sound: 'silent', vibrate: true }))?.vibrate).toBeDefined();
+    expect(cueFor({ type: 'countdown', sec: 2, total: 30 }, steps, s({ sound: 'silent', vibrate: true }))?.vibrate).toBeDefined();
   });
 });
 
@@ -252,5 +253,103 @@ describe('storage sanitizers (hostile input)', () => {
   it('dedupes saved routine ids', () => {
     const one = { id: 'x', name: 'A', exercises: [{ name: 'e', workSec: 5 }] };
     expect(sanitizeSaved([one, one]).length).toBe(1);
+  });
+});
+
+describe('count aloud every second', () => {
+  const steps = buildSteps(routine({ prepSec: 0 }));
+  const s = (over: Partial<Settings>): Settings => ({ ...DEFAULT_SETTINGS, ...over });
+
+  it('runner emits every second on work steps only when enabled', () => {
+    for (const every of [false, true]) {
+      let t = 0;
+      const r = new Runner(buildSteps(routine({ prepSec: 0 })), () => t, every);
+      r.start();
+      const secs: number[] = [];
+      while (r.index === 0) {
+        t += 100;
+        r.tick().forEach((e) => e.type === 'countdown' && secs.push(e.sec));
+      }
+      expect(secs).toEqual(every ? Array.from({ length: 29 }, (_, i) => 29 - i) : [3, 2, 1]);
+    }
+  });
+
+  it('does not count every second during rest', () => {
+    let t = 0;
+    const r = new Runner(buildSteps(routine({ prepSec: 0 })), () => t, true);
+    r.start();
+    r.skip(); // into the 10 s rest
+    const secs: number[] = [];
+    for (let i = 0; i < 120; i++) {
+      t += 100;
+      r.tick().forEach((e) => e.type === 'countdown' && secs.push(e.sec));
+      if (r.index !== 1) break;
+    }
+    expect(secs).toEqual([3, 2, 1]);
+  });
+
+  it('speaks long counts only in voice mode with "every", and skips the first 2 s', () => {
+    const ev = { type: 'countdown' as const, sec: 20, total: 30 };
+    expect(cueFor(ev, steps, s({ countAloud: 'every' }))?.speech).toBe('20');
+    expect(cueFor(ev, steps, s({ countAloud: 'last3' }))).toBeNull();
+    expect(cueFor(ev, steps, s({ countAloud: 'every', sound: 'beeps' }))).toBeNull();
+    expect(cueFor({ ...ev, sec: 29 }, steps, s({ countAloud: 'every' }))).toBeNull();
+    expect(cueFor({ ...ev, sec: 28 }, steps, s({ countAloud: 'every' }))?.speech).toBe('28');
+    // long counts never buzz or beep
+    expect(cueFor(ev, steps, s({ countAloud: 'every', vibrate: true }))?.vibrate).toBeUndefined();
+  });
+});
+
+describe('voice choice', () => {
+  const voices = [
+    { name: 'Daniel', lang: 'en-GB' },
+    { name: 'Samantha', lang: 'en-US' },
+    { name: 'Google UK English Female', lang: 'en-GB' },
+    { name: 'Google UK English Male', lang: 'en-GB' },
+    { name: 'Microsoft Zira Desktop - English (United States)', lang: 'en-US' },
+    { name: 'Thomas', lang: 'fr-FR' },
+    { name: 'Amelie', lang: 'fr-CA' },
+    { name: 'English (United States)', lang: 'en-US', voiceURI: 'en-us-x-tpf#female_1-local' },
+    { name: 'Mystery', lang: 'en-US' },
+  ];
+
+  it('guesses gender from names and URIs', () => {
+    expect(genderOf({ name: 'Samantha', lang: 'en-US' })).toBe('female');
+    expect(genderOf({ name: 'Google UK English Female', lang: 'en-GB' })).toBe('female');
+    expect(genderOf({ name: 'Google UK English Male', lang: 'en-GB' })).toBe('male');
+    expect(genderOf({ name: 'Daniel', lang: 'en-GB' })).toBe('male');
+    expect(genderOf(voices[7])).toBe('female');
+    expect(genderOf({ name: 'Mystery', lang: 'en-US' })).toBe('unknown');
+    // "female" must not be read as "male"
+    expect(genderOf({ name: 'Female Voice', lang: 'en-US' })).toBe('female');
+  });
+
+  it('prefers a US English voice of the chosen gender, ignores other languages', () => {
+    const f = pickVoice(voices, 'female', '');
+    expect(f?.lang).toBe('en-US'); // US English ranks above Google UK English Female
+    expect(f && genderOf(f)).toBe('female');
+    expect(pickVoice(voices, 'male', '')?.name).toBe('Daniel');
+    expect(pickVoice([{ name: 'Amelie', lang: 'fr-CA' }], 'female', '')).toBeUndefined();
+  });
+
+  it('auto uses the browser default; an exact name wins; a missing name falls back', () => {
+    expect(pickVoice(voices, 'auto', '')).toBeUndefined();
+    expect(pickVoice(voices, 'female', 'Daniel')?.name).toBe('Daniel');
+    expect(pickVoice(voices, 'male', 'Gone Voice')?.name).toBe('Daniel');
+  });
+
+  it('lists only English voices, sorted', () => {
+    const names = englishVoices(voices).map((v) => v.name);
+    expect(names).not.toContain('Thomas');
+    expect([...names].sort((a, b) => a.localeCompare(b))).toEqual(names);
+  });
+
+  it('settings sanitizer validates the new fields', () => {
+    expect(sanitizeSettings({ countAloud: 'always', voicePref: 'robot', voiceName: 5 })).toEqual(DEFAULT_SETTINGS);
+    const ok = sanitizeSettings({ countAloud: 'every', voicePref: 'female', voiceName: 'Microsoft Aria Online (Natural) - English (United States)' });
+    expect(ok.countAloud).toBe('every');
+    expect(ok.voicePref).toBe('female');
+    expect(ok.voiceName).toBe('Microsoft Aria Online (Natural) - English (United States)');
+    expect(sanitizeSettings({ voiceName: 'x'.repeat(500) }).voiceName.length).toBe(120);
   });
 });

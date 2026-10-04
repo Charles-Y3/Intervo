@@ -31,17 +31,28 @@ export interface Step {
 export type SoundMode = 'voice' | 'beeps' | 'silent';
 export type ThemeChoice = 'auto' | 'light' | 'dark';
 
+/** last3 = count only 3-2-1 before each step ends; every = also count every
+ * second out loud during work steps (voice mode only). */
+export type CountMode = 'last3' | 'every';
+/** Which kind of spoken voice to prefer. "auto" = the phone's default. */
+export type VoicePref = 'auto' | 'female' | 'male';
+
 export interface Settings {
   sound: SoundMode;
   vibrate: boolean;
   halfway: boolean;
   sides: boolean;
   theme: ThemeChoice;
+  countAloud: CountMode;
+  voicePref: VoicePref;
+  /** Exact voice name chosen from the list; "" = pick by voicePref. */
+  voiceName: string;
 }
 
 export type RunEvent =
   | { type: 'stepStart'; index: number }
-  | { type: 'countdown'; sec: number }
+  /** sec = whole seconds left; total = length of the current step in seconds. */
+  | { type: 'countdown'; sec: number; total: number }
   | { type: 'halfway' }
   | { type: 'finish' };
 

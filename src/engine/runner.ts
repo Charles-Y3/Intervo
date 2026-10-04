@@ -15,6 +15,8 @@ export class Runner {
   constructor(
     readonly steps: Step[],
     private readonly now: () => number,
+    /** Also emit a countdown event for every second of work steps (not only 3-2-1). */
+    private readonly everySecondOnWork = false,
   ) {}
 
   get paused(): boolean {
@@ -98,7 +100,10 @@ export class Runner {
 
     const sec = this.remainingSec();
     const total = this.step.durationSec + this.extraMs / 1000;
-    if (sec >= 1 && sec <= 3 && sec < this.lastSec && sec < total) events.push({ type: 'countdown', sec });
+    const wanted = sec <= 3 || (this.everySecondOnWork && this.step.kind === 'work');
+    if (sec >= 1 && wanted && sec < this.lastSec && sec < total) {
+      events.push({ type: 'countdown', sec, total: Math.round(total) });
+    }
     this.lastSec = Math.min(this.lastSec, sec);
 
     if (!this.halfwayFired && this.step.kind === 'work' && total >= 20 && this.remainingMs() <= (total * 1000) / 2) {

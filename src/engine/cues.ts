@@ -30,6 +30,12 @@ export function cueFor(ev: RunEvent, steps: Step[], settings: Settings): Cue | n
 function rawCue(ev: RunEvent, steps: Step[], settings: Settings): Cue | null {
   switch (ev.type) {
     case 'countdown':
+      if (ev.sec > 3) {
+        // Counting every second: voice mode only, and not in the first 2 s of a
+        // step, so the "Squats. Go" announcement is not cut off by a number.
+        if (settings.sound !== 'voice' || settings.countAloud !== 'every' || ev.total - ev.sec < 2) return null;
+        return { speech: String(ev.sec) };
+      }
       return { speech: String(ev.sec), beep: 'tick', vibrate: [60] };
     case 'halfway':
       if (settings.sides) return { speech: 'Switch sides', beep: 'half', vibrate: [120, 80, 120] };

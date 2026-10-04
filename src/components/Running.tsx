@@ -42,7 +42,9 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
   fireRef.current = fire;
 
   useEffect(() => {
-    const runner = new Runner(steps, () => performance.now());
+    // Counting every second only makes sense when spoken, so beeps/silent keep 3-2-1.
+    const every = settingsRef.current.countAloud === 'every' && settingsRef.current.sound === 'voice';
+    const runner = new Runner(steps, () => performance.now(), every);
     runnerRef.current = runner;
     const wake = createWakeLock();
     wake.on();

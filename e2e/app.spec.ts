@@ -163,3 +163,84 @@ test('manifest is installable', async ({ page }) => {
   expect(m.display).toBe('standalone');
   expect(m.icons.map((i: { sizes: string }) => i.sizes)).toEqual(expect.arrayContaining(['192x192', '512x512']));
 });
+
+// Records what the app asks the phone to say, with fake voices installed.
+async function spySpeech(page: Page) {
+  await page.addInitScript(() => {
+    const spoken: { text: string; voice: string | null }[] = [];
+    const voices = [
+      { name: 'Daniel', lang: 'en-GB', voiceURI: 'Daniel' },
+      { name: 'Samantha', lang: 'en-US', voiceURI: 'Samantha' },
+      { name: 'Amelie', lang: 'fr-CA', voiceURI: 'Amelie' },
+    ];
+    (window as unknown as { SpeechSynthesisUtterance: unknown }).SpeechSynthesisUtterance = class {
+      voice: { name: string } | null = null;
+      constructor(public text: string) {}
+    };
+    const synth = window.speechSynthesis as unknown as Record<string, unknown>;
+    synth.getVoices = () => voices;
+    synth.cancel = () => undefined;
+    synth.speak = (u: { text: string; voice: { name: string } | null }) => {
+      spoken.push({ text: u.text, voice: u.voice ? u.voice.name : null });
+    };
+    (window as unknown as { __spoken: typeof spoken }).__spoken = spoken;
+  });
+}
+const said = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __spoken: { text: string; voice: string | null }[] }).__spoken.filter((s) => s.text.trim() !== ''));
+
+test('settings: choosing a female voice speaks with a female voice, male with a male one', async ({ page }) => {
+  await spySpeech(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('group', { name: 'Voice', exact: true }).getByRole('button', { name: 'Female' }).click();
+  expect((await said(page)).at(-1)).toEqual({ text: 'Round one. Squats. Go', voice: 'Samantha' });
+  await page.getByRole('group', { name: 'Voice', exact: true }).getByRole('button', { name: 'Male', exact: true }).click();
+  expect((await said(page)).at(-1)?.voice).toBe('Daniel');
+  await page.getByRole('combobox', { name: 'Choose a specific voice' }).selectOption('Samantha');
+  expect((await said(page)).at(-1)?.voice).toBe('Samantha');
+  // French voice is not offered
+  await expect(page.getByRole('option', { name: /Amelie/ })).toHaveCount(0);
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByRole('combobox', { name: 'Choose a specific voice' })).toHaveValue('Samantha');
+});
+
+test('a workout speaks with the chosen voice', async ({ page }) => {
+  await spySpeech(page);
+  await page.addInitScript(() => localStorage.setItem('intervo:settings', JSON.stringify({ sound: 'voice', voicePref: 'female' })));
+  await page.clock.install();
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.clock.runFor(500);
+  const first = (await said(page))[0];
+  expect(first.voice).toBe('Samantha');
+});
+
+test('count aloud every second speaks each second during work', async ({ page }) => {
+  await spySpeech(page);
+  await page.addInitScript(() => localStorage.setItem('intervo:settings', JSON.stringify({ sound: 'voice', countAloud: 'every' })));
+  await page.clock.install();
+  await page.goto('/');
+  await page.getByRole('group', { name: 'Work' }).getByRole('button', { name: '10s' }).click();
+  await page.getByRole('group', { name: 'Get ready' }).getByRole('button', { name: 'None' }).click();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.clock.runFor(6_000);
+  const texts = (await said(page)).map((s) => s.text);
+  expect(texts[0]).toBe('Work. Go');
+  expect(texts).toEqual(expect.arrayContaining(['8', '7', '6', '5', '4']));
+  expect(texts).not.toContain('9'); // first 2 s are left for the announcement
+});
+
+test('default "last 3 seconds" does not count every second', async ({ page }) => {
+  await spySpeech(page);
+  await page.clock.install();
+  await page.goto('/');
+  await page.getByRole('group', { name: 'Work' }).getByRole('button', { name: '10s' }).click();
+  await page.getByRole('group', { name: 'Get ready' }).getByRole('button', { name: 'None' }).click();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.clock.runFor(6_000);
+  expect((await said(page)).map((s) => s.text)).toEqual(['Work. Go']);
+  await page.clock.runFor(3_500);
+  expect((await said(page)).map((s) => s.text)).toEqual(['Work. Go', '3', '2', '1']);
+});

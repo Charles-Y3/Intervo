@@ -4,7 +4,7 @@ import { Running } from './components/Running';
 import { SettingsSheet } from './components/SettingsSheet';
 import { Setup } from './components/Setup';
 import { UpdatePrompt } from './components/UpdatePrompt';
-import { unlockAudio } from './engine/device';
+import { setVoicePreference, unlockAudio } from './engine/device';
 import { sanitizeAppState, sanitizeSaved, sanitizeSettings, readJson, writeJson } from './engine/storage';
 import type { AppState } from './engine/storage';
 import type { Routine, Settings } from './engine/types';
@@ -24,6 +24,7 @@ export default function App() {
 
   useEffect(() => writeJson('state', state), [state]);
   useEffect(() => writeJson('settings', settings), [settings]);
+  useEffect(() => setVoicePreference(settings.voicePref, settings.voiceName), [settings.voicePref, settings.voiceName]);
   useEffect(() => writeJson('saved', saved), [saved]);
 
   useEffect(() => {
