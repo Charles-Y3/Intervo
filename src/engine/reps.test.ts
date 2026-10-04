@@ -154,6 +154,9 @@ describe('logging reps', () => {
 
   const mk = (id: string, day: number, reps: number, best: number): HistoryEntry => ({
     id,
+    routineId: '',
+    unit: 'kg',
+    note: '',
     at: new Date(2026, 9, day, 9).getTime(),
     routineName: 'Pull day',
     mode: 'routine',
@@ -162,7 +165,7 @@ describe('logging reps', () => {
     totalSec: 300,
     workSec: 100,
     completed: true,
-    exercises: [{ name: 'Pull-ups', sets: 3, workSec: 100, longestSec: 0, reps, bestReps: best }],
+    exercises: [{ name: 'Pull-ups', sets: 3, workSec: 100, longestSec: 0, reps, bestReps: best, weight: 0 }],
   });
   const list = [mk('1', 1, 24, 9), mk('2', 8, 30, 11), mk('3', 15, 36, 12)];
 

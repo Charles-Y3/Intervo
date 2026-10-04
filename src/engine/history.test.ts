@@ -9,7 +9,7 @@ import {
   filterEntries,
   parseDay,
   rangeFor,
-  routineNames,
+  routineOptions,
   sanitizeHistory,
   spanDays,
   summarize,
@@ -153,9 +153,12 @@ describe('dates', () => {
 
 const at = (y: number, m: number, d: number, h = 9) => new Date(y, m - 1, d, h).getTime();
 function entry(id: string, when: number, routineName: string, exercises: [string, number, number, number][], over: Partial<HistoryEntry> = {}): HistoryEntry {
-  const ex = exercises.map(([name, sets, workSec, longestSec]) => ({ name, sets, workSec, longestSec, reps: 0, bestReps: 0 }));
+  const ex = exercises.map(([name, sets, workSec, longestSec]) => ({ name, sets, workSec, longestSec, reps: 0, bestReps: 0, weight: 0 }));
   return {
     id,
+    routineId: '',
+    unit: 'kg',
+    note: '',
     at: when,
     routineName,
     mode: 'routine',
@@ -182,18 +185,18 @@ describe('filters', () => {
     expect(filterEntries(sample, f).map((e) => e.id)).toEqual(['2', '3']);
   });
   it('by routine', () => {
-    expect(filterEntries(sample, { ...NO_FILTERS, routine: 'Core' }).map((e) => e.id)).toEqual(['2', '4']);
+    expect(filterEntries(sample, { ...NO_FILTERS, routine: 'name:Core' }).map((e) => e.id)).toEqual(['2', '4']);
   });
   it('by exercise, ignoring case', () => {
     expect(filterEntries(sample, { ...NO_FILTERS, exercise: 'PLANK' }).map((e) => e.id)).toEqual(['1', '2', '3', '4']);
     expect(filterEntries(sample, { ...NO_FILTERS, exercise: 'squats' }).map((e) => e.id)).toEqual(['1', '3']);
   });
   it('combines filters', () => {
-    const f = { from: '2026-10-02', to: '2026-10-31', routine: 'Core', exercise: 'plank' };
+    const f = { from: '2026-10-02', to: '2026-10-31', routine: 'name:Core', exercise: 'plank' };
     expect(filterEntries(sample, f).map((e) => e.id)).toEqual(['2', '4']);
   });
   it('lists distinct names', () => {
-    expect(routineNames(sample)).toEqual(['Core', 'Leg day']);
+    expect(routineOptions(sample).map((o) => o.label)).toEqual(['Core', 'Leg day']);
     expect(exerciseNames(sample)).toEqual(['plank', 'Squats']); // newest spelling of plank wins
   });
 });

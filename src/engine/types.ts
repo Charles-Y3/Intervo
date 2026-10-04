@@ -1,4 +1,7 @@
 export type ExerciseKind = 'timed' | 'reps';
+/** Optional blocks played once before round 1 / after the last round. */
+export type Section = 'warmup' | 'cooldown';
+export type WeightUnit = 'kg' | 'lb';
 
 export interface Exercise {
   id: string;
@@ -9,6 +12,8 @@ export interface Exercise {
   kind?: ExerciseKind;
   /** Target reps per set (reps exercises). */
   reps?: number;
+  /** Extra weight (or 0 / undefined for none), in the unit chosen in Settings. */
+  weight?: number;
 }
 
 /** One workout. Quick mode is a Routine with a single exercise. */
@@ -20,6 +25,10 @@ export interface Routine {
   restBetweenRoundsSec: number;
   rounds: number;
   prepSec: number;
+  /** Played once before round 1 (optional). */
+  warmup?: Exercise[];
+  /** Played once after the last round (optional). */
+  cooldown?: Exercise[];
 }
 
 export type StepKind = 'prep' | 'work' | 'rest' | 'roundRest';
@@ -36,6 +45,12 @@ export interface Step {
   /** Target reps. Present = an untimed set that ends when the user taps Done;
    * durationSec is then only an estimate for the "total" line. */
   reps?: number;
+  /** Set for warm-up and cool-down steps (not part of the numbered rounds). */
+  section?: Section;
+  /** Extra weight for this set, if any. */
+  weight?: number;
+  /** Added mid-workout with "Extra set"; never counts toward rounds done. */
+  extra?: boolean;
 }
 
 export type SoundMode = 'voice' | 'beeps' | 'silent';
@@ -57,6 +72,9 @@ export interface Settings {
   voicePref: VoicePref;
   /** Exact voice name chosen from the list; "" = pick by voicePref. */
   voiceName: string;
+  units: WeightUnit;
+  /** Workouts per week to aim for; 0 = no goal. */
+  weeklyGoal: number;
 }
 
 export type RunEvent =
@@ -74,6 +92,9 @@ export const LIMITS = {
   maxSavedRoutines: 50,
   maxHistory: 1000,
   maxReps: 999,
+  maxSectionExercises: 10,
+  maxWeight: 999,
+  maxNote: 300,
 } as const;
 
 /** What a run actually completed (for the workout log). */
@@ -89,6 +110,10 @@ export interface RunResult {
     /** Reps sets: target and reps the user confirmed (0 if skipped). 0/0 for timed. */
     targetReps: number;
     reps: number;
+    /** Extra weight used (0 = none). */
+    weight: number;
+    section?: Section;
+    extra: boolean;
   }[];
   roundsDone: number;
 }

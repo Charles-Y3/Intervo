@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Finish } from './components/Finish';
 import { History } from './components/History';
 import { Running } from './components/Running';
@@ -6,16 +6,18 @@ import { SettingsSheet } from './components/SettingsSheet';
 import { Setup } from './components/Setup';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { setVoicePreference, unlockAudio } from './engine/device';
-import { buildEntry, sanitizeHistory, worthLogging } from './engine/history';
+import type { BackupData } from './engine/backup';
+import { withExamples } from './engine/examples';
+import { buildEntry, sanitizeHistory, weeklyProgress, worthLogging } from './engine/history';
 import type { HistoryEntry } from './engine/history';
-import { sanitizeAppState, sanitizeSaved, sanitizeSettings, readJson, writeJson } from './engine/storage';
+import { cleanText, sanitizeAppState, sanitizeSaved, sanitizeSettings, readJson, writeJson } from './engine/storage';
 import type { AppState } from './engine/storage';
 import type { RunResult, Routine, Settings } from './engine/types';
 import { LIMITS } from './engine/types';
 import { useInstallPrompt } from './hooks';
 import { S } from './strings';
 
-type Screen = { name: 'setup' } | { name: 'history' } | { name: 'running'; routine: Routine; run: number } | { name: 'finish'; routine: Routine; elapsedSec: number };
+type Screen = { name: 'setup' } | { name: 'history' } | { name: 'running'; routine: Routine; run: number } | { name: 'finish'; routine: Routine; elapsedSec: number; entryId: string | null };
 
 export default function App() {
   const [state, setState] = useState<AppState>(() => sanitizeAppState(readJson('state')));
@@ -43,10 +45,21 @@ export default function App() {
     setScreen((s) => ({ name: 'running', routine, run: s.name === 'running' ? s.run + 1 : 1 }));
   };
 
-  const log = (routine: Routine, result: RunResult, elapsedSec: number, completed: boolean) => {
-    if (!worthLogging(result)) return;
-    const entry = buildEntry(routine, result, elapsedSec, completed, Date.now());
+  /** Log a workout; returns the new entry's id (or null if it was too short to log). */
+  const log = (routine: Routine, result: RunResult, elapsedSec: number, completed: boolean): string | null => {
+    if (!worthLogging(result)) return null;
+    const entry = buildEntry(routine, result, elapsedSec, completed, Date.now(), settings.units);
     setHistory((list) => [entry, ...list].slice(0, LIMITS.maxHistory));
+    return entry.id;
+  };
+
+  const goal = useMemo(() => weeklyProgress(history, settings.weeklyGoal, Date.now()), [history, settings.weeklyGoal]);
+  const backupData: BackupData = { settings, state, saved, history };
+  const restore = (next: BackupData) => {
+    setSettings(next.settings);
+    setState(next.state);
+    setSaved(next.saved);
+    setHistory(next.history);
   };
 
   if (screen.name === 'history') {
@@ -67,8 +80,8 @@ export default function App() {
         routine={screen.routine}
         settings={settings}
         onFinish={(result, elapsedSec) => {
-          log(screen.routine, result, elapsedSec, true);
-          setScreen({ name: 'finish', routine: screen.routine, elapsedSec });
+          const entryId = log(screen.routine, result, elapsedSec, true);
+          setScreen({ name: 'finish', routine: screen.routine, elapsedSec, entryId });
         }}
         onExit={(result, elapsedSec) => {
           log(screen.routine, result, elapsedSec, false);
@@ -80,9 +93,17 @@ export default function App() {
 
   if (screen.name === 'finish') {
     const routine = screen.routine;
+    const entryId = screen.entryId;
     return (
       <main className="page">
-        <Finish elapsedSec={screen.elapsedSec} rounds={routine.rounds} onAgain={() => start(routine)} onBack={() => setScreen({ name: 'setup' })} onHistory={() => setScreen({ name: 'history' })} />
+        <Finish
+          elapsedSec={screen.elapsedSec}
+          rounds={routine.rounds}
+          onAgain={() => start(routine)}
+          onBack={() => setScreen({ name: 'setup' })}
+          onHistory={() => setScreen({ name: 'history' })}
+          onNote={(text) => setHistory((list) => list.map((e) => (e.id === entryId ? { ...e, note: cleanText(text, '', LIMITS.maxNote) } : e)))}
+        />
       </main>
     );
   }
@@ -109,6 +130,10 @@ export default function App() {
       <Setup
         state={state}
         saved={saved}
+        history={history}
+        goal={goal}
+        unit={settings.units}
+        onAddExamples={() => setSaved((list) => withExamples(list, LIMITS.maxSavedRoutines))}
         onState={setState}
         onStart={start}
         onUpsert={(r) =>
@@ -116,7 +141,7 @@ export default function App() {
         }
         onDeleteSaved={(id) => setSaved((list) => list.filter((x) => x.id !== id))}
       />
-      {settingsOpen && <SettingsSheet settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsSheet settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} backup={{ data: backupData, onRestore: restore }} />}
     </main>
   );
 }

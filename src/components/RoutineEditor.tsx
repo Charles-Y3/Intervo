@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { buildSteps, formatClock, hasRepSets, totalSeconds } from '../engine/plan';
 import { cleanName } from '../engine/storage';
 import { LIMITS } from '../engine/types';
-import type { Routine } from '../engine/types';
+import type { Routine, WeightUnit } from '../engine/types';
 import { S } from '../strings';
 import { ConfirmSheet } from './ConfirmSheet';
 import { ExerciseList, TimingFields } from './RoutineFields';
@@ -11,15 +11,17 @@ import { Sheet } from './Sheet';
 interface Props {
   initial: Routine;
   isNew: boolean;
+  unit: WeightUnit;
   onSave: (r: Routine) => void;
   onSaveAndStart: (r: Routine) => void;
+  onDuplicate: (r: Routine) => void;
   onDelete: (r: Routine) => void;
   onClose: () => void;
 }
 
-/** Popup for one routine: edit everything, then Save, Save and start, or Delete.
+/** Popup for one routine: edit everything, then Save, Save and start, Duplicate or Delete.
  * Closing with unsaved changes asks first; Delete always asks first. */
-export function RoutineEditor({ initial, isNew, onSave, onSaveAndStart, onDelete, onClose }: Props) {
+export function RoutineEditor({ initial, isNew, unit, onSave, onSaveAndStart, onDuplicate, onDelete, onClose }: Props) {
   const [draft, setDraft] = useState<Routine>(initial);
   const [confirm, setConfirm] = useState<'discard' | 'delete' | null>(null);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
@@ -35,8 +37,31 @@ export function RoutineEditor({ initial, isNew, onSave, onSaveAndStart, onDelete
         <input className="textInput" aria-label={S.routineName} value={draft.name} maxLength={LIMITS.maxNameLength} onChange={(e) => patch({ name: e.target.value })} />
       </label>
 
-      <ExerciseList exercises={draft.exercises} onChange={(exercises) => patch({ exercises })} />
+      <ExerciseList exercises={draft.exercises} unit={unit} onChange={(exercises) => patch({ exercises })} />
       <TimingFields r={draft} patch={patch} multi />
+
+      <ExerciseList
+        className="sectionBlock"
+        title={S.warmupTitle}
+        namePrefix={S.warmupExerciseName}
+        addLabel={S.addWarmup}
+        minCount={0}
+        maxCount={LIMITS.maxSectionExercises}
+        exercises={draft.warmup ?? []}
+        unit={unit}
+        onChange={(warmup) => patch({ warmup })}
+      />
+      <ExerciseList
+        className="sectionBlock"
+        title={S.cooldownTitle}
+        namePrefix={S.cooldownExerciseName}
+        addLabel={S.addCooldown}
+        minCount={0}
+        maxCount={LIMITS.maxSectionExercises}
+        exercises={draft.cooldown ?? []}
+        unit={unit}
+        onChange={(cooldown) => patch({ cooldown })}
+      />
 
       <div className="stickyActions">
         <div className="startTotal">
@@ -50,6 +75,11 @@ export function RoutineEditor({ initial, isNew, onSave, onSaveAndStart, onDelete
           {!isNew && (
             <button className="btn btnDangerOutline" onClick={() => setConfirm('delete')}>
               {S.deleteRoutine}
+            </button>
+          )}
+          {!isNew && (
+            <button className="btn" onClick={() => onDuplicate(clean())}>
+              {S.duplicate}
             </button>
           )}
           <button className="btn" onClick={() => onSave(clean())}>

@@ -614,6 +614,165 @@ button {
   font-size: var(--step-1);
 }
 
+.btnGhostDark {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-ink-soft);
+  text-decoration: underline;
+}
+
+.finishNote {
+  text-align: left;
+}
+
+/* Exercise rows, goal, backup, notes */
+.exRow {
+  display: grid;
+  grid-template-columns: 2.75rem 1fr auto;
+  grid-template-areas: 'handle name time' '. extras extras';
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.exRowDragging {
+  background: var(--color-bg);
+  outline: 2px solid var(--color-focus);
+  border-radius: 12px;
+}
+
+.dragHandle {
+  grid-area: handle;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1.5px solid var(--color-line);
+  background: var(--color-surface);
+  font-size: 1.4rem;
+  line-height: 1;
+  touch-action: none;
+  cursor: grab;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.exExtras {
+  grid-area: extras;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.exExtras .iconBtn {
+  margin-left: auto;
+}
+
+.weightInput {
+  width: 84px;
+  padding: 0 var(--space-2);
+  text-align: center;
+}
+
+.sectionBlock {
+  border-style: dashed;
+}
+
+.goalCard {
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-line);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.goalRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.goalDots {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.goalDot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--color-line);
+}
+
+.goalDotOn {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.sortRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sortRow .chip {
+  min-height: 36px;
+  min-width: 0;
+  padding: 0 var(--space-3);
+  font-size: var(--step--1);
+}
+
+.rcLast {
+  font-size: var(--step--1);
+}
+
+.noteBox {
+  width: 100%;
+  min-height: 96px;
+  padding: var(--space-3);
+  border-radius: 12px;
+  border: 1.5px solid var(--color-line);
+  background: var(--color-bg);
+  resize: vertical;
+}
+
+.histNote {
+  margin: 0;
+  font-style: italic;
+}
+
+.okText {
+  color: var(--phase-rest);
+  margin: 0;
+}
+
+:root[data-theme='dark'] .okText {
+  color: #7fd6a0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .okText {
+    color: #7fd6a0;
+  }
+}
+
+.runExtra {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.runWeight {
+  font-size: var(--step-1);
+  font-weight: 700;
+  margin-top: calc(-1 * var(--space-2));
+}
+
 /* Routine library */
 .routineList {
   list-style: none;
@@ -702,7 +861,6 @@ button {
 }
 
 .kindCompact {
-  margin-right: auto;
   gap: var(--space-1);
 }
 

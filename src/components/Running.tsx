@@ -100,12 +100,13 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
   return (
     <div className={`running phase-${phase}`}>
       <div className="runTop">
-        <span>{step.round > 0 ? S.roundOf(step.round, routine.rounds) : S.prep}</span>
+        <span>{step.section ? (step.section === 'warmup' ? S.warmupLabel : S.cooldownLabel) : step.round > 0 ? `${S.roundOf(step.round, routine.rounds)}${step.extra ? ` · ${S.extraTag}` : ''}` : S.prep}</span>
         {workSteps.length > 0 && <span>{S.stepOf(Math.max(1, currentWorkNo), workSteps.length)}</span>}
       </div>
 
       <div className="runPhase">{phaseName}</div>
       <div className="runName">{displayName}</div>
+      {step.kind === 'work' && step.weight ? <div className="runWeight">{`+${step.weight} ${settings.units}`}</div> : null}
 
       {untimed ? (
         <div className="repsPanel" data-testid="reps-panel">
@@ -176,9 +177,14 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
             {S.done}
           </button>
         )}
-        {phase === 'rest' && (
+        {!untimed && phase !== 'prep' && (
           <button className="btn btnGhost" onClick={() => runner.addTime(10)}>
             {S.addTen}
+          </button>
+        )}
+        {runner.canAddExtraSet() && (
+          <button className="btn btnGhost" onClick={() => runner.addExtraSet()}>
+            {S.extraSet}
           </button>
         )}
       </div>

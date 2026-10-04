@@ -114,6 +114,40 @@ export class Runner {
     return [{ type: 'stepStart', index: this.index }];
   }
 
+  /** Can the "Extra set" button be used now? During a rest, or on the very last step. */
+  canAddExtraSet(): boolean {
+    if (this.done) return false;
+    const k = this.step.kind;
+    const last = this.index >= this.steps.length - 1;
+    return (k === 'rest' || k === 'roundRest' || last) && this.lastWorkIndex() >= 0;
+  }
+
+  private lastWorkIndex(): number {
+    for (let i = Math.min(this.index, this.steps.length - 1); i >= 0; i--) if (this.steps[i].kind === 'work') return i;
+    return -1;
+  }
+
+  /** Repeat the exercise just done once more, right after the current step. */
+  addExtraSet(): void {
+    if (!this.canAddExtraSet()) return;
+    const w = this.steps[this.lastWorkIndex()];
+    const extra: Step = { ...w, extra: true, section: undefined };
+    const inRest = this.step.kind === 'rest' || this.step.kind === 'roundRest';
+    const restSec = inRest ? this.step.durationSec : this.lastRestSec();
+    const items: Step[] = inRest
+      ? [extra, { kind: 'rest', durationSec: restSec, label: 'Rest', round: w.round, exerciseIndex: -1 }]
+      : [{ kind: 'rest', durationSec: restSec, label: 'Rest', round: w.round, exerciseIndex: -1 }, extra];
+    this.steps.splice(this.index + 1, 0, ...items);
+    this.best.splice(this.index + 1, 0, ...items.map(() => 0));
+    this.repsDone.splice(this.index + 1, 0, ...items.map(() => 0));
+    this.setDone.splice(this.index + 1, 0, ...items.map(() => false));
+  }
+
+  private lastRestSec(): number {
+    for (let i = this.steps.length - 1; i >= 0; i--) if (this.steps[i].kind === 'rest' || this.steps[i].kind === 'roundRest') return this.steps[i].durationSec;
+    return 30;
+  }
+
   addTime(sec: number): void {
     this.extraMs += sec * 1000;
   }
@@ -173,9 +207,16 @@ export class Runner {
         complete: st.reps !== undefined ? this.setDone[i] : this.best[i] >= st.durationSec - 0.05,
         targetReps: st.reps ?? 0,
         reps: st.reps !== undefined ? this.repsDone[i] : 0,
+        weight: st.weight ?? 0,
+        section: st.section,
+        extra: st.extra === true,
       }));
+    // Rounds done = main rounds only (not warm-up, cool-down or extra sets).
     const rounds = new Map<number, boolean>();
-    for (const w of work) rounds.set(w.round, (rounds.get(w.round) ?? true) && w.complete);
+    for (const w of work) {
+      if (w.section || w.extra) continue;
+      rounds.set(w.round, (rounds.get(w.round) ?? true) && w.complete);
+    }
     return { work, roundsDone: [...rounds.values()].filter(Boolean).length };
   }
 

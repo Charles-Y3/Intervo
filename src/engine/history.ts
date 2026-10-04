@@ -1,6 +1,6 @@
-import { cleanName, clampInt, newId } from './storage';
+import { cleanName, cleanText, clampInt, clampWeight, newId } from './storage';
 import { LIMITS } from './types';
-import type { Routine, RunResult } from './types';
+import type { Routine, RunResult, WeightUnit } from './types';
 
 /** The workout log. One entry per workout, finished or ended early. Pure
  * functions only (filtering, grouping, chart data) so they are unit tested;
@@ -19,10 +19,18 @@ export interface ExerciseStat {
   reps: number;
   /** Most reps in a single set. */
   bestReps: number;
+  /** Heaviest extra weight used (0 = none). */
+  weight: number;
 }
 
 export interface HistoryEntry {
   id: string;
+  /** Id of the routine ('quick' for Quick mode); '' for entries saved before ids existed. */
+  routineId: string;
+  /** Unit of the weights in this entry. */
+  unit: WeightUnit;
+  /** Optional note typed on the finish screen. */
+  note: string;
   /** Epoch ms when the workout ended. */
   at: number;
   routineName: string;
@@ -38,16 +46,24 @@ export interface HistoryEntry {
 
 const key = (name: string) => name.trim().toLowerCase();
 
-export function buildEntry(routine: Routine, result: RunResult, totalSec: number, completed: boolean, at: number): HistoryEntry {
+export function buildEntry(
+  routine: Routine,
+  result: RunResult,
+  totalSec: number,
+  completed: boolean,
+  at: number,
+  unit: WeightUnit = 'kg',
+): HistoryEntry {
   const byName = new Map<string, ExerciseStat>();
   for (const w of result.work) {
     const k = key(w.name);
-    const stat = byName.get(k) ?? { name: w.name, sets: 0, workSec: 0, longestSec: 0, reps: 0, bestReps: 0 };
+    const stat = byName.get(k) ?? { name: w.name, sets: 0, workSec: 0, longestSec: 0, reps: 0, bestReps: 0, weight: 0 };
     stat.workSec += w.sec;
     if (w.complete) {
       stat.sets += 1;
       stat.longestSec = Math.max(stat.longestSec, w.plannedSec);
     }
+    stat.weight = Math.max(stat.weight, w.weight);
     if (w.targetReps > 0) {
       stat.reps += w.reps;
       stat.bestReps = Math.max(stat.bestReps, w.reps);
@@ -57,6 +73,9 @@ export function buildEntry(routine: Routine, result: RunResult, totalSec: number
   const exercises = [...byName.values()].map((e) => ({ ...e, workSec: Math.round(e.workSec) }));
   return {
     id: newId(),
+    routineId: routine.id,
+    unit,
+    note: '',
     at,
     routineName: routine.name,
     mode: routine.id === 'quick' ? 'quick' : 'routine',
@@ -72,6 +91,10 @@ export function buildEntry(routine: Routine, result: RunResult, totalSec: number
 /** Does any entry contain rep-based sets? Decides whether the rep metrics are offered. */
 export function hasRepData(entries: HistoryEntry[]): boolean {
   return entries.some((e) => e.exercises.some((s) => s.reps > 0));
+}
+
+export function hasWeightData(entries: HistoryEntry[]): boolean {
+  return entries.some((e) => e.exercises.some((s) => s.weight > 0));
 }
 
 /** Worth logging? Ignores accidental starts (under 3 s of work). */
@@ -94,6 +117,7 @@ function sanitizeStat(v: unknown, i: number): ExerciseStat {
     longestSec: clampInt(o.longestSec, 0, LIMITS.maxSeconds, 0),
     reps: clampInt(o.reps, 0, 999999, 0),
     bestReps: clampInt(o.bestReps, 0, LIMITS.maxReps, 0),
+    weight: clampWeight(o.weight),
   };
 }
 
@@ -112,6 +136,9 @@ export function sanitizeHistory(v: unknown): HistoryEntry[] {
     const list = Array.isArray(item.exercises) ? item.exercises.slice(0, LIMITS.maxExercises) : [];
     out.push({
       id,
+      routineId: typeof item.routineId === 'string' && item.routineId.length <= 40 ? item.routineId : '',
+      unit: item.unit === 'lb' ? 'lb' : 'kg',
+      note: cleanText(item.note, '', LIMITS.maxNote),
       at,
       routineName: cleanName(item.routineName, 'Workout'),
       mode: item.mode === 'quick' ? 'quick' : 'routine',
@@ -159,7 +186,7 @@ export function rangeFor(preset: RangePreset, todayMs: number): { from: string; 
 export interface Filters {
   from: string;
   to: string;
-  /** Routine name, '' = all. */
+  /** Routine key (see routineKey), '' = all. */
   routine: string;
   /** Exercise name, '' = all. */
   exercise: string;
@@ -173,14 +200,29 @@ export function filterEntries(entries: HistoryEntry[], f: Filters): HistoryEntry
     const day = dayKey(e.at);
     if (f.from && day < f.from) return false;
     if (f.to && day > f.to) return false;
-    if (f.routine && e.routineName !== f.routine) return false;
+    if (f.routine && routineKey(e) !== f.routine) return false;
     if (ex && !e.exercises.some((s) => key(s.name) === ex)) return false;
     return true;
   });
 }
 
-export function routineNames(entries: HistoryEntry[]): string[] {
-  return [...new Set(entries.map((e) => e.routineName))].sort((a, b) => a.localeCompare(b));
+/** Stable identity of the routine an entry came from: its id, or (old entries) its name. */
+export function routineKey(e: HistoryEntry): string {
+  return e.routineId || `name:${e.routineName}`;
+}
+
+/** Routines to offer in the filter: one per key, labelled with the newest name
+ * (so a renamed routine stays one choice). */
+export function routineOptions(entries: HistoryEntry[]): { key: string; label: string }[] {
+  const latest = new Map<string, HistoryEntry>();
+  for (const e of entries) {
+    const k = routineKey(e);
+    const cur = latest.get(k);
+    if (!cur || e.at > cur.at) latest.set(k, e);
+  }
+  return [...latest.entries()]
+    .map(([key, e]) => ({ key, label: e.routineName }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 /** Distinct exercise names (case-insensitive), most recently used spelling. */
@@ -191,7 +233,7 @@ export function exerciseNames(entries: HistoryEntry[]): string[] {
 }
 
 /** The numbers an entry contributes: just the chosen exercise, or everything. */
-export function statsFor(e: HistoryEntry, exercise: string): { workSec: number; sets: number; longestSec: number; reps: number; bestReps: number } {
+export function statsFor(e: HistoryEntry, exercise: string): { workSec: number; sets: number; longestSec: number; reps: number; bestReps: number; weight: number } {
   const ex = key(exercise);
   const list = ex ? e.exercises.filter((s) => key(s.name) === ex) : e.exercises;
   return {
@@ -200,6 +242,7 @@ export function statsFor(e: HistoryEntry, exercise: string): { workSec: number; 
     longestSec: list.reduce((a, s) => Math.max(a, s.longestSec), 0),
     reps: list.reduce((a, s) => a + s.reps, 0),
     bestReps: list.reduce((a, s) => Math.max(a, s.bestReps), 0),
+    weight: list.reduce((a, s) => Math.max(a, s.weight), 0),
   };
 }
 
@@ -226,7 +269,7 @@ export function summarize(entries: HistoryEntry[], exercise: string): Summary {
 // ---- chart data ----
 
 export type Group = 'day' | 'week' | 'month';
-export type Metric = 'time' | 'sets' | 'longest' | 'sessions' | 'reps' | 'bestReps';
+export type Metric = 'time' | 'sets' | 'longest' | 'sessions' | 'reps' | 'bestReps' | 'weight';
 
 export interface Bucket {
   /** Sort/ID key: YYYY-MM-DD (day, week start) or YYYY-MM. */
@@ -278,6 +321,7 @@ export function bucketize(entries: HistoryEntry[], f: Filters, group: Group, met
     else if (metric === 'sessions') map.set(k, cur + 1);
     else if (metric === 'reps') map.set(k, cur + s.reps);
     else if (metric === 'bestReps') map.set(k, Math.max(cur, s.bestReps));
+    else if (metric === 'weight') map.set(k, Math.max(cur, s.weight));
     else map.set(k, Math.max(cur, s.longestSec));
   }
 
@@ -304,4 +348,57 @@ export function spanDays(entries: HistoryEntry[], f: Filters): number {
   if (entries.length === 0) return 1;
   const t = entries.map((e) => e.at);
   return Math.max(1, Math.round((Math.max(...t) - Math.min(...t)) / 86400000) + 1);
+}
+
+// ---- per-routine "last done" ----
+
+export interface LastDone {
+  /** Epoch ms of the most recent logged workout, or null if never. */
+  at: number | null;
+  /** Workouts in the last 30 days. */
+  recent: number;
+}
+
+/** Entries belong to a routine by id, or (entries from before ids) by name. */
+export function lastDone(entries: HistoryEntry[], routine: { id: string; name: string }, nowMs: number): LastDone {
+  let at: number | null = null;
+  let recent = 0;
+  const since = nowMs - 30 * 86400000;
+  for (const e of entries) {
+    const mine = e.routineId ? e.routineId === routine.id : e.routineName === routine.name;
+    if (!mine) continue;
+    if (at === null || e.at > at) at = e.at;
+    if (e.at >= since && e.at <= nowMs) recent++;
+  }
+  return { at, recent };
+}
+
+// ---- weekly goal and streak ----
+
+export interface GoalProgress {
+  goal: number;
+  /** Completed workouts so far this week (Monday to Sunday). */
+  thisWeek: number;
+  /** Consecutive weeks that reached the goal (this week counts once it is met). */
+  streakWeeks: number;
+}
+
+export function weeklyProgress(entries: HistoryEntry[], goal: number, nowMs: number): GoalProgress {
+  const counts = new Map<string, number>();
+  for (const e of entries) {
+    if (!e.completed || e.at > nowMs) continue;
+    const k = dayKey(startOf('week', e.at).getTime());
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const thisStart = startOf('week', nowMs);
+  const thisWeek = counts.get(dayKey(thisStart.getTime())) ?? 0;
+  if (goal <= 0) return { goal, thisWeek, streakWeeks: 0 };
+  let streak = thisWeek >= goal ? 1 : 0;
+  const d = new Date(thisStart);
+  for (let i = 0; i < 520; i++) {
+    d.setDate(d.getDate() - 7);
+    if ((counts.get(dayKey(d.getTime())) ?? 0) >= goal) streak++;
+    else break;
+  }
+  return { goal, thisWeek, streakWeeks: streak };
 }

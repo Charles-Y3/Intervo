@@ -1,5 +1,5 @@
 import { LIMITS } from './types';
-import type { CountMode, Exercise, Routine, Settings, SoundMode, ThemeChoice, VoicePref } from './types';
+import type { CountMode, Exercise, Routine, Settings, SoundMode, ThemeChoice, VoicePref, WeightUnit } from './types';
 
 /** Everything read from localStorage is untrusted (old versions, edited by
  * hand, another tab). Each sanitizer clamps or replaces bad values with
@@ -14,6 +14,8 @@ export const DEFAULT_SETTINGS: Settings = {
   countAloud: 'last3',
   voicePref: 'auto',
   voiceName: '',
+  units: 'kg',
+  weeklyGoal: 0,
 };
 
 let idCounter = 0;
@@ -56,6 +58,13 @@ export function clampInt(v: unknown, min: number, max: number, fallback: number)
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+/** 0 = no extra weight. Keeps one decimal (2.5 kg plates). */
+export function clampWeight(v: unknown): number {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(Math.min(LIMITS.maxWeight, n) * 10) / 10;
+}
+
 export function cleanText(v: unknown, fallback: string, max: number): string {
   if (typeof v !== 'string') return fallback;
   // eslint-disable-next-line no-control-regex
@@ -79,7 +88,13 @@ function sanitizeExercise(v: unknown, i: number): Exercise {
     workSec: clampInt(o.workSec, 1, LIMITS.maxSeconds, 30),
     kind: o.kind === 'reps' ? 'reps' : 'timed',
     reps: clampInt(o.reps, 1, LIMITS.maxReps, 10),
+    weight: clampWeight(o.weight),
   };
+}
+
+/** Optional warm-up / cool-down list: may be empty, at most 10 exercises. */
+function sanitizeBlock(v: unknown): Exercise[] {
+  return Array.isArray(v) ? v.slice(0, LIMITS.maxSectionExercises).map(sanitizeExercise) : [];
 }
 
 export function sanitizeRoutine(v: unknown, fallback: Routine): Routine {
@@ -94,6 +109,8 @@ export function sanitizeRoutine(v: unknown, fallback: Routine): Routine {
     restBetweenRoundsSec: clampInt(v.restBetweenRoundsSec, 0, LIMITS.maxSeconds, fallback.restBetweenRoundsSec),
     rounds: clampInt(v.rounds, 1, LIMITS.maxRounds, fallback.rounds),
     prepSec: clampInt(v.prepSec, 0, 60, fallback.prepSec),
+    warmup: sanitizeBlock(v.warmup),
+    cooldown: sanitizeBlock(v.cooldown),
   };
 }
 
@@ -113,6 +130,8 @@ export function sanitizeSettings(v: unknown): Settings {
     countAloud: COUNTS.includes(o.countAloud as CountMode) ? (o.countAloud as CountMode) : DEFAULT_SETTINGS.countAloud,
     voicePref: VOICE_PREFS.includes(o.voicePref as VoicePref) ? (o.voicePref as VoicePref) : DEFAULT_SETTINGS.voicePref,
     voiceName: typeof o.voiceName === 'string' ? cleanText(o.voiceName, '', 120) : '',
+    units: o.units === 'lb' ? ('lb' as WeightUnit) : ('kg' as WeightUnit),
+    weeklyGoal: clampInt(o.weeklyGoal, 0, 7, 0),
   };
 }
 
@@ -130,11 +149,14 @@ export function sanitizeSaved(v: unknown): Routine[] {
 }
 
 export type Mode = 'quick' | 'routine';
+export type RoutineSort = 'recent' | 'name' | 'added';
 
 /** Quick mode's working copy. Routines live in the saved list, not here. */
 export interface AppState {
   mode: Mode;
   quick: Routine;
+  /** How the routine cards are ordered. */
+  sort: RoutineSort;
 }
 
 export function sanitizeAppState(v: unknown): AppState {
@@ -145,6 +167,7 @@ export function sanitizeAppState(v: unknown): AppState {
   return {
     mode: o.mode === 'routine' ? 'routine' : 'quick',
     quick,
+    sort: o.sort === 'name' || o.sort === 'added' ? o.sort : 'recent',
   };
 }
 

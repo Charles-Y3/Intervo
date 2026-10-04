@@ -3,15 +3,19 @@ import { canVibrate, playBeep, setVoicePreference, speak, vibrate } from '../eng
 import type { CountMode, Settings, SoundMode, ThemeChoice, VoicePref } from '../engine/types';
 import { englishVoices, genderOf, pickVoice } from '../engine/voices';
 import { S } from '../strings';
+import type { BackupData } from '../engine/backup';
+import { BackupSection } from './BackupSection';
 import { Sheet } from './Sheet';
 
 interface Props {
   settings: Settings;
   onChange: (s: Settings) => void;
   onClose: () => void;
+  /** Everything on this phone, and how to replace it (for Backup). */
+  backup: { data: BackupData; onRestore: (next: BackupData) => void };
 }
 
-export function SettingsSheet({ settings, onChange, onClose }: Props) {
+export function SettingsSheet({ settings, onChange, onClose, backup }: Props) {
   const set = (p: Partial<Settings>) => onChange({ ...settings, ...p });
   const sounds: [SoundMode, string][] = [
     ['voice', S.soundVoice],
@@ -150,6 +154,28 @@ export function SettingsSheet({ settings, onChange, onClose }: Props) {
       {!vib && <p className="muted">{S.vibrateUnsupported}</p>}
 
       <div className="field">
+        <div className="fieldLabel">{S.weeklyGoal}</div>
+        <div className="chips" role="group" aria-label={S.weeklyGoal}>
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
+            <button key={n} className={`chip${settings.weeklyGoal === n ? ' chipOn' : ''}`} aria-pressed={settings.weeklyGoal === n} onClick={() => set({ weeklyGoal: n })}>
+              {n === 0 ? S.goalOff : n}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="field">
+        <div className="fieldLabel">{S.units}</div>
+        <div className="chips" role="group" aria-label={S.units}>
+          {(['kg', 'lb'] as const).map((u) => (
+            <button key={u} className={`chip${settings.units === u ? ' chipOn' : ''}`} aria-pressed={settings.units === u} onClick={() => set({ units: u })}>
+              {u}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="field">
         <div className="fieldLabel">{S.theme}</div>
         <div className="chips" role="group" aria-label={S.theme}>
           {themes.map(([v, label]) => (
@@ -159,6 +185,7 @@ export function SettingsSheet({ settings, onChange, onClose }: Props) {
           ))}
         </div>
       </div>
+      <BackupSection data={backup.data} onRestore={backup.onRestore} />
     </Sheet>
   );
 }

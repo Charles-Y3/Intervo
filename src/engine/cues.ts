@@ -53,10 +53,11 @@ function rawCue(ev: RunEvent, steps: Step[], settings: Settings): Cue | null {
           return { speech: first ? `Get ready. First, ${first.label}` : 'Get ready', beep: 'rest', vibrate: [100] };
         }
         case 'work': {
-          const firstOfRound = step.exerciseIndex === 0 && step.round > 1 && multiRound;
+          const firstOfRound = !step.section && step.exerciseIndex === 0 && step.round > 1 && multiRound;
           const what = step.reps !== undefined ? `${step.label}. ${step.reps} ${step.reps === 1 ? 'rep' : 'reps'}` : step.label;
+          const lead = step.section && step.exerciseIndex === 0 ? (step.section === 'warmup' ? 'Warm-up. ' : 'Cool-down. ') : '';
           return {
-            speech: firstOfRound ? `Round ${step.round}. ${what}. Go` : `${what}. Go`,
+            speech: lead + (firstOfRound ? `Round ${step.round}. ${what}. Go` : `${what}. Go`),
             beep: 'go',
             vibrate: [250],
           };

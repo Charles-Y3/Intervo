@@ -5,9 +5,10 @@ import {
   exerciseNames,
   filterEntries,
   hasRepData,
+  hasWeightData,
   parseDay,
   rangeFor,
-  routineNames,
+  routineOptions,
   spanDays,
   statsFor,
   summarize,
@@ -52,7 +53,8 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
   const sum = summarize(filtered, exercise);
   const dirty = routine !== '' || exercise !== '' || preset !== '30';
 
-  const format = (v: number) => (metric === 'time' || metric === 'longest' ? formatShort(v) : String(Math.round(v)));
+  const unit = entries[0]?.unit ?? 'kg';
+  const format = (v: number) => (metric === 'time' || metric === 'longest' ? formatShort(v) : metric === 'weight' ? `${v} ${unit}` : String(Math.round(v)));
   const repData = hasRepData(entries);
   const metrics: [Metric, string][] = [
     ['time', S.metricTime],
@@ -60,6 +62,7 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
     ['longest', S.metricLongest],
     ['sessions', S.metricSessions],
     ...(repData ? ([['reps', S.metricReps], ['bestReps', S.metricBestReps]] as [Metric, string][]) : []),
+    ...(hasWeightData(entries) ? ([['weight', S.metricWeight]] as [Metric, string][]) : []),
   ];
   const presets: [RangePreset, string][] = [
     ['7', S.last7],
@@ -152,9 +155,9 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
                 }}
               >
                 <option value="">{S.allRoutines}</option>
-                {routineNames(entries).map((n) => (
-                  <option key={n} value={n}>
-                    {n}
+                {routineOptions(entries).map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
                   </option>
                 ))}
               </select>
@@ -243,12 +246,14 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
                       {e.exercises
                         .filter((s) => !exercise || s.name.toLowerCase() === exercise.toLowerCase())
                         .map((s) =>
-                          s.reps > 0
+                          (s.reps > 0
                             ? `${s.name} ${s.reps} ${S.repsUnit} · ${s.sets} sets (best ${s.bestReps})`
-                            : `${s.name} ×${s.sets}${s.longestSec ? ` (${formatShort(s.longestSec)})` : ''}`,
+                            : `${s.name} ×${s.sets}${s.longestSec ? ` (${formatShort(s.longestSec)})` : ''}`) +
+                          (s.weight > 0 ? ` +${s.weight} ${e.unit}` : ''),
                         )
                         .join(' · ')}
                     </p>
+                    {e.note && <p className="histNote">{e.note}</p>}
                     <button className="btn btnSmall" onClick={() => setConfirm({ kind: 'one', entry: e })} aria-label={`${S.deleteWorkout}: ${e.routineName}`}>
                       {S.deleteWorkout}
                     </button>

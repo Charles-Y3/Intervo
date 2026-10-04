@@ -1,4 +1,4 @@
-import type { Routine, Step } from './types';
+import type { Exercise, Routine, Section, Step } from './types';
 
 /** Flatten a routine into the exact sequence of countdowns to run.
  * Rules: optional get-ready first; a short rest between exercises inside a
@@ -7,28 +7,52 @@ import type { Routine, Step } from './types';
 /** Rough seconds per rep, only used for the "total" estimate of rep sets. */
 export const SEC_PER_REP_ESTIMATE = 3;
 
+function workStep(ex: Exercise, round: number, exerciseIndex: number, section?: Section): Step {
+  const base: Step = { kind: 'work', durationSec: ex.workSec, label: ex.name, round, exerciseIndex };
+  if (ex.kind === 'reps') {
+    const reps = ex.reps ?? 10;
+    base.durationSec = reps * SEC_PER_REP_ESTIMATE;
+    base.reps = reps;
+  }
+  if (section) base.section = section;
+  if (ex.weight !== undefined && ex.weight > 0) base.weight = ex.weight;
+  return base;
+}
+
 export function buildSteps(r: Routine): Step[] {
   const steps: Step[] = [];
   if (r.prepSec > 0) {
     steps.push({ kind: 'prep', durationSec: r.prepSec, label: 'Get ready', round: 0, exerciseIndex: -1 });
   }
+  const betweenSec = r.restBetweenExercisesSec;
+  const rest = (round: number): Step => ({ kind: 'rest', durationSec: betweenSec, label: 'Rest', round, exerciseIndex: -1 });
+
+  // A block of exercises (warm-up or cool-down): short rests between them.
+  const block = (list: Exercise[] | undefined, section: Section, round: number) => {
+    (list ?? []).forEach((ex, i, all) => {
+      steps.push(workStep(ex, round, i, section));
+      if (i < all.length - 1 && betweenSec > 0) steps.push(rest(round));
+    });
+  };
+
+  block(r.warmup, 'warmup', 0);
+  if (r.warmup?.length && betweenSec > 0) steps.push(rest(0));
+
   const lastExercise = r.exercises.length - 1;
   for (let round = 1; round <= r.rounds; round++) {
     r.exercises.forEach((ex, i) => {
-      if (ex.kind === 'reps') {
-        const reps = ex.reps ?? 10;
-        steps.push({ kind: 'work', durationSec: reps * SEC_PER_REP_ESTIMATE, label: ex.name, round, exerciseIndex: i, reps });
-      } else {
-        steps.push({ kind: 'work', durationSec: ex.workSec, label: ex.name, round, exerciseIndex: i });
-      }
+      steps.push(workStep(ex, round, i));
       if (i < lastExercise) {
-        if (r.restBetweenExercisesSec > 0) {
-          steps.push({ kind: 'rest', durationSec: r.restBetweenExercisesSec, label: 'Rest', round, exerciseIndex: -1 });
-        }
+        if (betweenSec > 0) steps.push(rest(round));
       } else if (round < r.rounds && r.restBetweenRoundsSec > 0) {
         steps.push({ kind: 'roundRest', durationSec: r.restBetweenRoundsSec, label: 'Rest', round, exerciseIndex: -1 });
       }
     });
+  }
+
+  if (r.cooldown?.length) {
+    if (betweenSec > 0) steps.push(rest(r.rounds));
+    block(r.cooldown, 'cooldown', r.rounds);
   }
   return steps;
 }

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatShort } from '../engine/plan';
-import { cleanName, newId } from '../engine/storage';
+import { cleanName, clampWeight, newId } from '../engine/storage';
 import { LIMITS } from '../engine/types';
-import type { Exercise, Routine } from '../engine/types';
+import type { Exercise, Routine, WeightUnit } from '../engine/types';
 import { S } from '../strings';
 import { ConfirmSheet } from './ConfirmSheet';
 import { KindToggle, RepsInput } from './RepsField';
@@ -57,31 +57,137 @@ export function TimingFields({ r, patch, multi }: { r: Routine; patch: (p: Parti
   );
 }
 
-/** Ordered exercise rows: name, time or reps, Timed/Reps, move, remove (asks first). */
-export function ExerciseList({ exercises, onChange }: { exercises: Exercise[]; onChange: (e: Exercise[]) => void }) {
+/** Optional extra weight. Empty = bodyweight (0). Keeps its own text so it can be cleared while typing. */
+export function WeightInput({ value, unit, onChange, label, className = '' }: { value: number; unit: WeightUnit; onChange: (n: number) => void; label: string; className?: string }) {
+  const show = (n: number) => (n > 0 ? String(n) : '');
+  const [text, setText] = useState(show(value));
+  useEffect(() => setText(show(value)), [value]);
+  return (
+    <input
+      className={`textInput weightInput ${className}`}
+      type="number"
+      inputMode="decimal"
+      min={0}
+      max={LIMITS.maxWeight}
+      step={0.5}
+      placeholder={unit}
+      aria-label={label}
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        onChange(clampWeight(e.target.value));
+      }}
+      onBlur={() => setText(show(value))}
+    />
+  );
+}
+
+interface ListProps {
+  exercises: Exercise[];
+  onChange: (e: Exercise[]) => void;
+  unit: WeightUnit;
+  /** Heading (default: Exercises). */
+  title?: string;
+  /** Prefix of each name field's accessible label, so lists stay distinguishable. */
+  namePrefix?: string;
+  addLabel?: string;
+  /** Fewest exercises allowed (1 for the main list, 0 for warm-up/cool-down). */
+  minCount?: number;
+  maxCount?: number;
+  className?: string;
+}
+
+/** Ordered exercise rows: drag handle (or arrow keys), name, time or reps, Timed/Reps,
+ * extra weight, remove (asks first). */
+export function ExerciseList({
+  exercises,
+  onChange,
+  unit,
+  title = S.exercises,
+  namePrefix = S.exerciseName,
+  addLabel = S.addExercise,
+  minCount = 1,
+  maxCount = LIMITS.maxExercises,
+  className = '',
+}: ListProps) {
   const [padFor, setPadFor] = useState<string | null>(null);
   const [removing, setRemoving] = useState<Exercise | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const rows = useRef(new Map<string, HTMLLIElement>());
+  const handles = useRef(new Map<string, HTMLButtonElement>());
   const update = (id: string, p: Partial<Exercise>) => onChange(exercises.map((e) => (e.id === id ? { ...e, ...p } : e)));
-  const move = (i: number, d: number) => {
-    const j = i + d;
-    if (j < 0 || j >= exercises.length) return;
+
+  const moveTo = (id: string, to: number) => {
+    const from = exercises.findIndex((e) => e.id === id);
+    if (from < 0 || to < 0 || to >= exercises.length || to === from) return;
     const next = exercises.slice();
-    [next[i], next[j]] = [next[j], next[i]];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
     onChange(next);
   };
 
+  // Where the pointer is decides the slot: the first row whose middle is below it.
+  const dragMove = (id: string, clientY: number) => {
+    const rects = exercises.map((e) => rows.current.get(e.id)?.getBoundingClientRect());
+    let to = rects.findIndex((r) => r !== undefined && clientY < r.top + r.height / 2);
+    if (to === -1) to = exercises.length - 1;
+    moveTo(id, to);
+  };
+
+  // Listen on the window while dragging: reordering moves the row's DOM node, which
+  // drops pointer capture on the handle, so handle-level events would stop after one swap.
+  useEffect(() => {
+    if (!dragId) return;
+    const move = (e: PointerEvent) => dragMove(dragId, e.clientY);
+    const end = () => setDragId(null);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+  });
+
   return (
-    <div className="field">
+    <div className={`field ${className}`}>
       <div className="fieldHead">
-        <span className="fieldLabel">{S.exercises}</span>
+        <span className="fieldLabel">{title}</span>
       </div>
       <ol className="exList">
         {exercises.map((ex, i) => (
-          <li key={ex.id} className="exRow">
-            <span className="exNum">{i + 1}</span>
+          <li
+            key={ex.id}
+            className={`exRow${dragId === ex.id ? ' exRowDragging' : ''}`}
+            ref={(el) => {
+              if (el) rows.current.set(ex.id, el);
+              else rows.current.delete(ex.id);
+            }}
+          >
+            <button
+              className="dragHandle"
+              aria-label={S.reorder(ex.name)}
+              ref={(el) => {
+                if (el) handles.current.set(ex.id, el);
+                else handles.current.delete(ex.id);
+              }}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                setDragId(ex.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                e.preventDefault();
+                moveTo(ex.id, i + (e.key === 'ArrowUp' ? -1 : 1));
+                window.requestAnimationFrame(() => handles.current.get(ex.id)?.focus());
+              }}
+            >
+              ≡
+            </button>
             <input
               className="textInput exName"
-              aria-label={`${S.exerciseName} ${i + 1}`}
+              aria-label={`${namePrefix} ${i + 1}`}
               value={ex.name}
               maxLength={LIMITS.maxNameLength}
               onChange={(e) => update(ex.id, { name: e.target.value })}
@@ -94,18 +200,13 @@ export function ExerciseList({ exercises, onChange }: { exercises: Exercise[]; o
                 {formatShort(ex.workSec)}
               </button>
             )}
-            <div className="exActions">
+            <div className="exExtras">
               <KindToggle compact value={ex.kind ?? 'timed'} onChange={(kind) => update(ex.id, { kind })} />
-              <button className="iconBtn" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`${S.moveUp}: ${ex.name}`}>
-                ↑
-              </button>
-              <button className="iconBtn" onClick={() => move(i, 1)} disabled={i === exercises.length - 1} aria-label={`${S.moveDown}: ${ex.name}`}>
-                ↓
-              </button>
+              <WeightInput value={ex.weight ?? 0} unit={unit} label={S.weightLabel(ex.name, unit)} onChange={(weight) => update(ex.id, { weight })} />
               <button
                 className="iconBtn"
                 onClick={() => setRemoving(ex)}
-                disabled={exercises.length <= 1}
+                disabled={exercises.length <= minCount}
                 aria-label={`${S.removeExercise}: ${ex.name}`}
               >
                 ×
@@ -140,7 +241,7 @@ export function ExerciseList({ exercises, onChange }: { exercises: Exercise[]; o
       )}
       <button
         className="btn addBtn"
-        disabled={exercises.length >= LIMITS.maxExercises}
+        disabled={exercises.length >= maxCount}
         onClick={() =>
           onChange([
             ...exercises,
@@ -148,7 +249,7 @@ export function ExerciseList({ exercises, onChange }: { exercises: Exercise[]; o
           ])
         }
       >
-        + {S.addExercise}
+        + {addLabel}
       </button>
     </div>
   );
