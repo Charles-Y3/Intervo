@@ -7,12 +7,14 @@ export function ConfirmSheet({
   title,
   message,
   confirmLabel,
+  cancelLabel,
   onConfirm,
   onCancel,
 }: {
   title: string;
   message: string;
   confirmLabel: string;
+  cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -21,7 +23,7 @@ export function ConfirmSheet({
       <p className="confirmText">{message}</p>
       <div className="sheetActions">
         <button className="btn" onClick={onCancel}>
-          {S.confirmCancel}
+          {cancelLabel ?? S.confirmCancel}
         </button>
         <button className="btn btnDanger" onClick={onConfirm}>
           {confirmLabel}

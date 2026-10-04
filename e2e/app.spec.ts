@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { seedRoutines } from './helpers';
 
 const phase = (page: Page) => page.locator('.running');
 
@@ -92,29 +93,11 @@ test('zero time is rejected with a message', async ({ page }) => {
   await expect(pad.getByRole('alert')).toBeVisible();
 });
 
-test('routine: add exercises, set rest between, save, reload keeps it', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('tab', { name: 'Routine' }).click();
-  await page.getByRole('button', { name: /Add exercise/ }).click();
-  await page.getByLabel('Exercise name 1').fill('Squats');
-  await page.getByRole('group', { name: 'Rest between exercises' }).getByRole('button', { name: '15s' }).click();
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Saved' })).toBeVisible();
-  await page.reload();
-  await expect(page.getByRole('tab', { name: 'Routine' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByLabel('Exercise name 1')).toHaveValue('Squats');
-  await expect(page.getByRole('group', { name: 'Rest between exercises' }).getByRole('button', { name: '15s' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.savedItem')).toHaveCount(1);
-});
-
 test('routine runs exercises in rotation with rest between', async ({ page }) => {
+  await seedRoutines(page, [{ id: 'r', name: 'Pair', exercises: [{ name: 'Squats' }, { name: 'Lunges' }] }]);
   await page.clock.install();
   await page.goto('/');
-  await page.getByRole('tab', { name: 'Routine' }).click();
-  await page.getByLabel('Exercise name 1').fill('Squats');
-  await page.getByLabel('Exercise name 2').fill('Lunges');
-  await page.getByRole('group', { name: 'Get ready' }).getByRole('button', { name: 'None' }).click();
-  await page.getByRole('button', { name: 'Start routine' }).click();
+  await page.getByRole('button', { name: 'Start Pair' }).click();
   await expect(page.locator('.runName')).toHaveText('Squats');
   await page.getByRole('button', { name: 'Skip' }).click(); // -> rest 10s
   await expect(phase(page)).toHaveClass(/phase-rest/);
@@ -130,8 +113,9 @@ test('garbage in localStorage does not break the app', async ({ page }) => {
     localStorage.setItem('intervo:saved', '{"a":1}');
   });
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Start routine' })).toBeVisible();
-  await expect(page.getByLabel('Exercise name 1')).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Routine' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('no-routines')).toBeVisible();
+  await expect(page.getByRole('button', { name: /New routine/ })).toBeVisible();
 });
 
 test('settings: sound mode and theme persist', async ({ page }) => {

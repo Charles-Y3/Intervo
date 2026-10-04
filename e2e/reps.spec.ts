@@ -67,19 +67,21 @@ test('routine mixes a reps exercise with a timed one; kind and reps persist', as
   await page.clock.install();
   await page.goto('/');
   await page.getByRole('tab', { name: 'Routine' }).click();
+  await page.getByRole('button', { name: /New routine/ }).click();
   await page.getByLabel('Exercise name 1').fill('Pull-ups');
   const row1 = page.locator('.exRow').first();
   await row1.getByRole('group', { name: 'Exercise type' }).getByRole('button', { name: 'Reps' }).click();
   await row1.getByLabel('Pull-ups: Reps').fill('9');
   await page.getByLabel('Exercise name 2').fill('Plank');
   await page.getByRole('group', { name: 'Get ready' }).getByRole('button', { name: 'None' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
 
   await page.reload();
-  await page.getByRole('tab', { name: 'Routine' }).click();
+  await page.getByRole('button', { name: 'Edit routine: New routine' }).click();
   await expect(page.locator('.exRow').first().getByLabel('Pull-ups: Reps')).toHaveValue('9');
   await expect(page.locator('.exRow').nth(1).getByRole('button', { name: /Plank: 30s/ })).toBeVisible(); // timed stays a time button
+  await page.getByRole('button', { name: 'Save and start' }).click();
 
-  await page.getByRole('button', { name: 'Start routine' }).click();
   await expect(page.getByTestId('reps-now')).toHaveText('9');
   await page.getByRole('button', { name: 'Done', exact: true }).click(); // -> rest 10 s
   await expect(page.locator('.running')).toHaveClass(/phase-rest/);

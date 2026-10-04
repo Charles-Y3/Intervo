@@ -111,7 +111,9 @@ export default function App() {
         saved={saved}
         onState={setState}
         onStart={start}
-        onSave={(r) => setSaved((list) => [r, ...list].slice(0, LIMITS.maxSavedRoutines))}
+        onUpsert={(r) =>
+          setSaved((list) => (list.some((x) => x.id === r.id) ? list.map((x) => (x.id === r.id ? r : x)) : [r, ...list].slice(0, LIMITS.maxSavedRoutines)))
+        }
         onDeleteSaved={(id) => setSaved((list) => list.filter((x) => x.id !== id))}
       />
       {settingsOpen && <SettingsSheet settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} />}

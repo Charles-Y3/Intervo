@@ -131,10 +131,10 @@ export function sanitizeSaved(v: unknown): Routine[] {
 
 export type Mode = 'quick' | 'routine';
 
+/** Quick mode's working copy. Routines live in the saved list, not here. */
 export interface AppState {
   mode: Mode;
   quick: Routine;
-  routine: Routine;
 }
 
 export function sanitizeAppState(v: unknown): AppState {
@@ -145,7 +145,6 @@ export function sanitizeAppState(v: unknown): AppState {
   return {
     mode: o.mode === 'routine' ? 'routine' : 'quick',
     quick,
-    routine: sanitizeRoutine(o.routine, defaultRoutine()),
   };
 }
 

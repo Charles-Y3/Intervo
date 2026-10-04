@@ -1,35 +1,38 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { LEG_DAY, seedRoutines } from './helpers';
 
 // ---------- deletes always ask first ----------
 
 test('deleting a saved routine asks first; cancel keeps it', async ({ page }) => {
+  await seedRoutines(page, [LEG_DAY]);
   await page.goto('/');
-  await page.getByRole('tab', { name: 'Routine' }).click();
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.locator('.savedItem')).toHaveCount(1);
-  await page.getByRole('button', { name: /Delete: My routine/ }).click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Delete this saved routine?' })).toBeVisible();
-  await expect(page.locator('.savedItem')).toHaveCount(1); // nothing deleted yet
-  await dialog.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.locator('.savedItem')).toHaveCount(1);
-  await page.getByRole('button', { name: /Delete: My routine/ }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect(page.locator('.savedItem')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Edit routine: Leg day' }).click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  const confirm = page.getByRole('dialog', { name: 'Delete this saved routine?' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('dialog', { name: 'Edit routine' })).toBeVisible(); // still editing
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Delete this saved routine?' }).getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByTestId('routine-card')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId('no-routines')).toBeVisible();
 });
 
 test('removing an exercise asks first', async ({ page }) => {
+  await seedRoutines(page, [LEG_DAY]);
   await page.goto('/');
-  await page.getByRole('tab', { name: 'Routine' }).click();
+  await page.getByRole('button', { name: 'Edit routine: Leg day' }).click();
   await expect(page.getByLabel(/Exercise name \d/)).toHaveCount(3);
-  await page.getByRole('button', { name: 'Remove: Exercise 2' }).click();
-  await expect(page.getByRole('dialog').getByRole('heading', { name: 'Remove this exercise?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Remove: Lunges' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Remove this exercise?' });
+  await expect(confirm).toBeVisible();
   await expect(page.getByLabel(/Exercise name \d/)).toHaveCount(3);
-  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+  await confirm.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.getByLabel(/Exercise name \d/)).toHaveCount(3);
-  await page.getByRole('button', { name: 'Remove: Exercise 2' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Remove', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove: Lunges' }).click();
+  await page.getByRole('dialog', { name: 'Remove this exercise?' }).getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(page.getByLabel(/Exercise name \d/)).toHaveCount(2);
 });
 
