@@ -8,6 +8,10 @@ export default defineConfig({
     VitePWA({
       // 'prompt' so a new version never swaps in silently mid-workout;
       // UpdatePrompt shows a banner instead.
+      // Our own worker (src/sw.ts) so it can also show push notifications.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icons/favicon.ico', 'icons/apple-touch-icon.png'],
@@ -26,11 +30,11 @@ export default defineConfig({
           { src: '/icons/iconMaskable512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,ico,json,webmanifest}'] },
+      injectManifest: { globPatterns: ['**/*.{js,css,html,svg,png,ico,json,webmanifest}'] },
     }),
   ],
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'api/**/*.test.ts'],
     environment: 'node',
   },
 });

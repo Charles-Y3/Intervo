@@ -62,6 +62,15 @@ export type CountMode = 'last3' | 'every';
 /** Which kind of spoken voice to prefer. "auto" = the phone's default. */
 export type VoicePref = 'auto' | 'female' | 'male';
 
+/** A repeating workout reminder, delivered as a push notification by the server. */
+export interface ReminderSettings {
+  enabled: boolean;
+  /** "HH:MM", 24 hour, in this phone's own time zone. */
+  time: string;
+  /** 0 = Sunday ... 6 = Saturday. */
+  days: number[];
+}
+
 export interface Settings {
   sound: SoundMode;
   vibrate: boolean;
@@ -75,6 +84,7 @@ export interface Settings {
   units: WeightUnit;
   /** Workouts per week to aim for; 0 = no goal. */
   weeklyGoal: number;
+  reminder: ReminderSettings;
 }
 
 export type RunEvent =

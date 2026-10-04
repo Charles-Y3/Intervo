@@ -5,6 +5,7 @@ import { englishVoices, genderOf, pickVoice } from '../engine/voices';
 import { S } from '../strings';
 import type { BackupData } from '../engine/backup';
 import { BackupSection } from './BackupSection';
+import { RemindersSection } from './RemindersSection';
 import { Sheet } from './Sheet';
 
 interface Props {
@@ -163,6 +164,8 @@ export function SettingsSheet({ settings, onChange, onClose, backup }: Props) {
           ))}
         </div>
       </div>
+
+      <RemindersSection reminder={settings.reminder} onChange={(reminder) => set({ reminder })} />
 
       <div className="field">
         <div className="fieldLabel">{S.units}</div>

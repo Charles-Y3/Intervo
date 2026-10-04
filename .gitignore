@@ -4,3 +4,6 @@ dist
 test-results
 playwright-report
 .claude/scheduled_tasks.lock
+.env.local
+.env.*.local
+.vercel

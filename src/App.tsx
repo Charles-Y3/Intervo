@@ -15,6 +15,7 @@ import type { AppState } from './engine/storage';
 import type { RunResult, Routine, Settings } from './engine/types';
 import { LIMITS } from './engine/types';
 import { useInstallPrompt } from './hooks';
+import { syncReminders } from './services/push';
 import { S } from './strings';
 
 type Screen = { name: 'setup' } | { name: 'history' } | { name: 'running'; routine: Routine; run: number } | { name: 'finish'; routine: Routine; elapsedSec: number; entryId: string | null };
@@ -27,6 +28,14 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'setup' });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { canInstall, promptInstall } = useInstallPrompt();
+
+  // Reminders: each time the app opens, re-send the schedule. This keeps the time zone
+  // current after travel and quietly restores a server record that was lost.
+  useEffect(() => {
+    if (settings.reminder.enabled) void syncReminders(settings.reminder);
+    // Once per app open, using the settings loaded at startup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => writeJson('state', state), [state]);
   useEffect(() => writeJson('settings', settings), [settings]);
@@ -56,7 +65,7 @@ export default function App() {
   const goal = useMemo(() => weeklyProgress(history, settings.weeklyGoal, Date.now()), [history, settings.weeklyGoal]);
   const backupData: BackupData = { settings, state, saved, history };
   const restore = (next: BackupData) => {
-    setSettings(next.settings);
+    setSettings({ ...next.settings, reminder: { ...next.settings.reminder, enabled: false } });
     setState(next.state);
     setSaved(next.saved);
     setHistory(next.history);

@@ -24,7 +24,7 @@ Interval timer PWA for exercise (work / rest / rounds, voice or silent). English
 - Exercise reordering uses window-level pointer listeners (a row's DOM node moves when reordered, which drops pointer capture on the handle); arrow keys on the handle work too.
 - Quick mode is a Routine with exactly one exercise; one engine for both modes.
 - The service worker uses `registerType: 'prompt'` so an update never swaps in mid-workout.
-- No network calls. Keep `connect-src 'self'` in `vercel.json`.
+- The ONLY network traffic is workout reminders (same-origin `/api/push/*`), and only after the user turns them on. Sent: push address, time, weekdays, time zone. Keep `connect-src 'self'`. Server code in `api/` (Vercel functions, imports end in `.js`): endpoints must be https on an allowlisted push service (SSRF), `x-cron-secret` is required (fails closed), table capped. Setup: docs/REMINDERS_SETUP.md. Service worker is `src/sw.ts` (injectManifest).
 - Tests must be proven to fail on a deliberately broken build (done for: trailing rest, no catch-up, unclamped rounds, silent every-second counting, counting during rest, swapped voice gender).
 
 ## Commands

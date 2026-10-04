@@ -38,7 +38,7 @@ test('a reps set never times out on its own', async ({ page }) => {
   await page.goto('/');
   await setupQuickReps(page, 'Pull-ups', '8');
   await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await page.clock.runFor(10 * 60 * 1000);
+  await page.clock.runFor(3 * 60 * 1000); // 3 min is 5x the estimated set time; lighter than 10
   await expect(page.getByTestId('reps-panel')).toBeVisible();
   await expect(page.getByTestId('reps-now')).toHaveText('8');
   await page.getByRole('button', { name: 'Pause' }).click();

@@ -1,5 +1,5 @@
 import { LIMITS } from './types';
-import type { CountMode, Exercise, Routine, Settings, SoundMode, ThemeChoice, VoicePref, WeightUnit } from './types';
+import type { CountMode, Exercise, ReminderSettings, Routine, Settings, SoundMode, ThemeChoice, VoicePref, WeightUnit } from './types';
 
 /** Everything read from localStorage is untrusted (old versions, edited by
  * hand, another tab). Each sanitizer clamps or replaces bad values with
@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   voiceName: '',
   units: 'kg',
   weeklyGoal: 0,
+  reminder: { enabled: false, time: '18:00', days: [1, 3, 5] },
 };
 
 let idCounter = 0;
@@ -119,6 +120,16 @@ const THEMES: ThemeChoice[] = ['auto', 'light', 'dark'];
 const COUNTS: CountMode[] = ['last3', 'every'];
 const VOICE_PREFS: VoicePref[] = ['auto', 'female', 'male'];
 
+/** Reminder time and weekdays from storage: anything invalid falls back to the default. */
+export function sanitizeReminder(v: unknown): ReminderSettings {
+  const o = isRecord(v) ? v : {};
+  const time = typeof o.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(o.time) ? o.time : '18:00';
+  const days = Array.isArray(o.days)
+    ? [...new Set(o.days.filter((d): d is number => typeof d === 'number' && Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b)
+    : [];
+  return { enabled: o.enabled === true, time, days: days.length > 0 ? days : [1, 3, 5] };
+}
+
 export function sanitizeSettings(v: unknown): Settings {
   const o = isRecord(v) ? v : {};
   return {
@@ -132,6 +143,7 @@ export function sanitizeSettings(v: unknown): Settings {
     voiceName: typeof o.voiceName === 'string' ? cleanText(o.voiceName, '', 120) : '',
     units: o.units === 'lb' ? ('lb' as WeightUnit) : ('kg' as WeightUnit),
     weeklyGoal: clampInt(o.weeklyGoal, 0, 7, 0),
+    reminder: sanitizeReminder(o.reminder),
   };
 }
 
