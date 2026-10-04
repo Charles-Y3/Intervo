@@ -62,4 +62,11 @@ export const LIMITS = {
   maxExercises: 30,
   maxNameLength: 40,
   maxSavedRoutines: 50,
+  maxHistory: 1000,
 } as const;
+
+/** What a run actually completed (for the workout log). */
+export interface RunResult {
+  work: { name: string; round: number; plannedSec: number; sec: number; complete: boolean }[];
+  roundsDone: number;
+}

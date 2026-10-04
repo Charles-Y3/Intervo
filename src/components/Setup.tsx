@@ -5,6 +5,7 @@ import type { AppState, Mode } from '../engine/storage';
 import { LIMITS } from '../engine/types';
 import type { Exercise, Routine } from '../engine/types';
 import { S } from '../strings';
+import { ConfirmSheet } from './ConfirmSheet';
 import { NumberPad, TimeField } from './TimeField';
 
 interface Props {
@@ -28,6 +29,7 @@ export function Setup({ state, saved, onState, onStart, onSave, onDeleteSaved }:
   const setMode = (m: Mode) => onState({ ...state, mode: m });
   const total = totalSeconds(buildSteps(r));
   const [justSaved, setJustSaved] = useState(false);
+  const [deleteSaved, setDeleteSaved] = useState<Routine | null>(null);
 
   return (
     <div className="setup">
@@ -40,13 +42,26 @@ export function Setup({ state, saved, onState, onStart, onSave, onDeleteSaved }:
       </div>
 
       {mode === 'quick' ? (
-        <TimeField
-          label={S.work}
-          big
-          value={r.exercises[0].workSec}
-          presets={WORK_PRESETS}
-          onChange={(sec) => patch({ exercises: [{ ...r.exercises[0], workSec: sec }] })}
-        />
+        <>
+          <label className="field dateLabel">
+            <span className="fieldLabel">{S.quickExercise}</span>
+            <input
+              className="textInput"
+              value={r.exercises[0].name}
+              placeholder={S.quickExercisePlaceholder}
+              maxLength={LIMITS.maxNameLength}
+              onChange={(e) => patch({ exercises: [{ ...r.exercises[0], name: e.target.value }] })}
+              onBlur={(e) => patch({ exercises: [{ ...r.exercises[0], name: cleanName(e.target.value, 'Work') }] })}
+            />
+          </label>
+          <TimeField
+            label={S.work}
+            big
+            value={r.exercises[0].workSec}
+            presets={WORK_PRESETS}
+            onChange={(sec) => patch({ exercises: [{ ...r.exercises[0], workSec: sec }] })}
+          />
+        </>
       ) : (
         <ExerciseList exercises={r.exercises} onChange={(exercises) => patch({ exercises })} />
       )}
@@ -126,7 +141,7 @@ export function Setup({ state, saved, onState, onStart, onSave, onDeleteSaved }:
                   <button className="btn btnSmall" onClick={() => onState({ ...state, mode: 'routine', routine: { ...s, id: 'draft' } })}>
                     {S.loadRoutine}
                   </button>
-                  <button className="btn btnSmall" onClick={() => onDeleteSaved(s.id)}>
+                  <button className="btn btnSmall" onClick={() => setDeleteSaved(s)} aria-label={`${S.deleteRoutine}: ${s.name}`}>
                     {S.deleteRoutine}
                   </button>
                 </li>
@@ -134,6 +149,19 @@ export function Setup({ state, saved, onState, onStart, onSave, onDeleteSaved }:
             </ul>
           )}
         </div>
+      )}
+
+      {deleteSaved && (
+        <ConfirmSheet
+          title={S.confirmDeleteRoutineTitle}
+          message={S.confirmDeleteRoutineBody(deleteSaved.name)}
+          confirmLabel={S.deleteRoutine}
+          onCancel={() => setDeleteSaved(null)}
+          onConfirm={() => {
+            onDeleteSaved(deleteSaved.id);
+            setDeleteSaved(null);
+          }}
+        />
       )}
 
       <div className="startBar">
@@ -150,6 +178,7 @@ export function Setup({ state, saved, onState, onStart, onSave, onDeleteSaved }:
 
 function ExerciseList({ exercises, onChange }: { exercises: Exercise[]; onChange: (e: Exercise[]) => void }) {
   const [padFor, setPadFor] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<Exercise | null>(null);
   const update = (id: string, p: Partial<Exercise>) => onChange(exercises.map((e) => (e.id === id ? { ...e, ...p } : e)));
   const move = (i: number, d: number) => {
     const j = i + d;
@@ -188,7 +217,7 @@ function ExerciseList({ exercises, onChange }: { exercises: Exercise[]; onChange
               </button>
               <button
                 className="iconBtn"
-                onClick={() => onChange(exercises.filter((e) => e.id !== ex.id))}
+                onClick={() => setRemoving(ex)}
                 disabled={exercises.length <= 1}
                 aria-label={`${S.removeExercise}: ${ex.name}`}
               >
@@ -210,6 +239,18 @@ function ExerciseList({ exercises, onChange }: { exercises: Exercise[]; onChange
           </li>
         ))}
       </ol>
+      {removing && (
+        <ConfirmSheet
+          title={S.confirmRemoveExerciseTitle}
+          message={S.confirmRemoveExerciseBody(removing.name)}
+          confirmLabel={S.removeExercise}
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => {
+            onChange(exercises.filter((e) => e.id !== removing.id));
+            setRemoving(null);
+          }}
+        />
+      )}
       <button
         className="btn addBtn"
         disabled={exercises.length >= LIMITS.maxExercises}

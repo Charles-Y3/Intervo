@@ -3,15 +3,17 @@ import { cueFor } from '../engine/cues';
 import { createWakeLock, performCue, stopSpeaking } from '../engine/device';
 import { buildSteps, formatClock, formatShort } from '../engine/plan';
 import { Runner } from '../engine/runner';
-import type { RunEvent, Routine, Settings } from '../engine/types';
+import type { RunEvent, RunResult, Routine, Settings } from '../engine/types';
 import { S } from '../strings';
 import { Sheet } from './Sheet';
 
 interface Props {
   routine: Routine;
   settings: Settings;
-  onFinish: (elapsedSec: number) => void;
-  onExit: () => void;
+  /** Workout ran to the end. */
+  onFinish: (result: RunResult, elapsedSec: number) => void;
+  /** User ended it early; result holds what was done so far. */
+  onExit: (result: RunResult, elapsedSec: number) => void;
 }
 
 const R = 90;
@@ -35,7 +37,7 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
     for (const ev of events) performCue(cueFor(ev, steps, eff), eff);
     if (events.some((e) => e.type === 'finish') && !doneRef.current) {
       doneRef.current = true;
-      onFinish(Math.round(elapsedRef.current / 1000));
+      onFinish(runnerRef.current!.result(), Math.round(elapsedRef.current / 1000));
     }
   };
   const fireRef = useRef(fire);
@@ -166,11 +168,19 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
 
       {confirmEnd && (
         <Sheet title={S.endConfirm} onClose={() => setConfirmEnd(false)}>
+          <p className="confirmText">{S.endSavedNote}</p>
           <div className="sheetActions">
             <button className="btn" onClick={() => setConfirmEnd(false)}>
               {S.endNo}
             </button>
-            <button className="btn btnDanger" onClick={onExit}>
+            <button
+              className="btn btnDanger"
+              onClick={() => {
+                if (doneRef.current) return;
+                doneRef.current = true;
+                onExit(runner.result(), Math.round(elapsedRef.current / 1000));
+              }}
+            >
               {S.endYes}
             </button>
           </div>

@@ -8,6 +8,7 @@
   --color-accent-ink: #ffffff;
   --color-focus: #1a5fd0;
   --color-danger: #b3261e;
+  --color-danger-ink: #ffffff;
 
   --phase-prep: #1f4f9c;
   --phase-work: #b32d1a;
@@ -40,6 +41,7 @@
   --color-accent-ink: #1c1b19;
   --color-focus: #7db0ff;
   --color-danger: #ff8a80;
+  --color-danger-ink: #1c1b19;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -53,5 +55,6 @@
     --color-accent-ink: #1c1b19;
     --color-focus: #7db0ff;
     --color-danger: #ff8a80;
+    --color-danger-ink: #1c1b19;
   }
 }

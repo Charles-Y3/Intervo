@@ -18,7 +18,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
   color: inherit;
 }
@@ -107,7 +108,7 @@ button {
 .btnDanger {
   background: var(--color-danger);
   border-color: var(--color-danger);
-  color: #fff;
+  color: var(--color-danger-ink);
 }
 
 .btnGhost {
@@ -611,6 +612,154 @@ button {
   display: flex;
   flex-direction: column;
   font-size: var(--step-1);
+}
+
+/* Confirm + history */
+.confirmText {
+  margin: 0;
+}
+
+.btnDangerOutline {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.stats3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.stats3 .stat {
+  padding: var(--space-3);
+  font-size: var(--step-0);
+}
+
+.dateRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.dateLabel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--step--1);
+  color: var(--color-ink-soft);
+}
+
+.dateLabel .fieldLabel {
+  color: var(--color-ink);
+  font-size: var(--step-0);
+}
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.chart svg {
+  width: 100%;
+  height: auto;
+}
+
+.chartGrid {
+  stroke: var(--color-line);
+  stroke-width: 1;
+}
+
+.chartAxis {
+  fill: var(--color-ink-soft);
+  font-size: 10px;
+}
+
+.chartValue {
+  fill: var(--color-ink);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.chartBar {
+  fill: var(--color-accent);
+}
+
+.chartBarOn {
+  fill: var(--color-ink);
+}
+
+.chartHit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.chartHit:focus-visible {
+  stroke: var(--color-focus);
+  stroke-width: 2;
+}
+
+.chartPick {
+  min-height: 1.4em;
+  text-align: center;
+}
+
+.histList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.histItem {
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-line);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.histTop {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.histEx {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.tag {
+  font-size: var(--step--1);
+  border: 1.5px solid var(--color-line);
+  border-radius: 999px;
+  padding: 2px var(--space-2);
+  white-space: nowrap;
+  height: fit-content;
+}
+
+.tagOk {
+  border-color: var(--phase-rest);
+  color: var(--phase-rest);
+}
+
+:root[data-theme='dark'] .tagOk {
+  color: #7fd6a0;
+  border-color: #7fd6a0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .tagOk {
+    color: #7fd6a0;
+    border-color: #7fd6a0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

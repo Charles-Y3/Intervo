@@ -1,4 +1,4 @@
-import type { RunEvent, Step } from './types';
+import type { RunEvent, RunResult, Step } from './types';
 
 /** Time-driven run state machine. It never counts ticks: every answer is
  * computed from the clock, so a throttled or frozen tab catches up to the
@@ -11,13 +11,17 @@ export class Runner {
   private pausedAt: number | null = null;
   private lastSec = Infinity;
   private halfwayFired = false;
+  /** Most seconds ever completed in each step (survives skip/back). */
+  private best: number[];
 
   constructor(
     readonly steps: Step[],
     private readonly now: () => number,
     /** Also emit a countdown event for every second of work steps (not only 3-2-1). */
     private readonly everySecondOnWork = false,
-  ) {}
+  ) {
+    this.best = steps.map(() => 0);
+  }
 
   get paused(): boolean {
     return this.pausedAt !== null;
@@ -31,6 +35,7 @@ export class Runner {
   start(): RunEvent[] {
     this.done = false;
     this.pausedAt = null;
+    this.best = this.steps.map(() => 0);
     this.enter(0, this.now());
     return [{ type: 'stepStart', index: 0 }];
   }
@@ -92,6 +97,7 @@ export class Runner {
       if (rem > 0) break;
       if (this.index >= this.steps.length - 1) return this.finish();
       const stepEnd = this.startedAt + this.step.durationSec * 1000 + this.extraMs;
+      this.best[this.index] = this.step.durationSec;
       this.enter(this.index + 1, stepEnd);
       entered = true;
     }
@@ -113,12 +119,42 @@ export class Runner {
     return events;
   }
 
+  /** Seconds done so far in the current step, capped at its length. */
+  private snap(): void {
+    const at = this.pausedAt ?? this.now();
+    const secs = Math.min(this.step.durationSec, Math.max(0, (at - this.startedAt) / 1000));
+    this.best[this.index] = Math.max(this.best[this.index], secs);
+  }
+
+  /** What was actually done, for the workout log. Safe to call any time. */
+  result(): RunResult {
+    if (!this.done) this.snap();
+    const work = this.steps
+      .map((st, i) => ({ st, i }))
+      .filter(({ st }) => st.kind === 'work')
+      .map(({ st, i }) => ({
+        name: st.label,
+        round: st.round,
+        plannedSec: st.durationSec,
+        sec: Math.round(this.best[i] * 10) / 10,
+        complete: this.best[i] >= st.durationSec - 0.05,
+      }));
+    const rounds = new Map<number, boolean>();
+    for (const w of work) rounds.set(w.round, (rounds.get(w.round) ?? true) && w.complete);
+    return { work, roundsDone: [...rounds.values()].filter(Boolean).length };
+  }
+
   private finish(): RunEvent[] {
+    if (this.index >= this.steps.length - 1) {
+      if (this.remainingMs() <= 0) this.best[this.index] = this.step.durationSec;
+      else this.snap();
+    }
     this.done = true;
     return [{ type: 'finish' }];
   }
 
   private goto(i: number): void {
+    this.snap();
     const wasPaused = this.pausedAt !== null;
     const at = this.now();
     this.enter(i, at);
