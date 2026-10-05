@@ -144,6 +144,7 @@ export default function App() {
         unit={settings.units}
         distUnit={settings.distanceUnit}
         onAddExamples={() => setSaved((list) => withExamples(list, LIMITS.maxSavedRoutines))}
+        onAddTemplate={(r) => setSaved((list) => (list.some((x) => x.id === r.id) ? list : [r, ...list].slice(0, LIMITS.maxSavedRoutines)))}
         onState={setState}
         onStart={start}
         onUpsert={(r) =>

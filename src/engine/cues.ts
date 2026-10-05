@@ -1,4 +1,4 @@
-import { formatShort, nextWorkStep } from './plan';
+import { formatSpoken, nextWorkStep } from './plan';
 import type { RunEvent, Settings, Step } from './types';
 
 export type Beep = 'tick' | 'go' | 'rest' | 'half' | 'done';
@@ -41,6 +41,8 @@ function rawCue(ev: RunEvent, steps: Step[], settings: Settings): Cue | null {
       if (settings.sides) return { speech: 'Switch sides', beep: 'half', vibrate: [120, 80, 120] };
       if (settings.halfway) return { speech: 'Halfway', beep: 'half', vibrate: [80] };
       return null;
+    case 'timeUp':
+      return { speech: 'Time. How many reps did you do?', beep: 'rest', vibrate: [200, 80, 200] };
     case 'finish':
       return { speech: 'Workout complete. Well done', beep: 'done', vibrate: [300, 100, 300] };
     case 'stepStart': {
@@ -61,9 +63,10 @@ function rawCue(ev: RunEvent, steps: Step[], settings: Settings): Cue | null {
               : step.distance !== undefined
                 ? `${step.label}. ${step.distance} ${unitWord(step.distance)}`
                 : step.label;
+          const timedNote = step.reps !== undefined && step.timedSec !== undefined ? ` in ${formatSpoken(step.timedSec)}` : '';
           const lead = step.section && step.exerciseIndex === 0 ? (step.section === 'warmup' ? 'Warm-up. ' : 'Cool-down. ') : '';
           return {
-            speech: lead + (firstOfRound ? `Round ${step.round}. ${what}. Go` : `${what}. Go`),
+            speech: lead + (firstOfRound ? `Round ${step.round}. ${what}${timedNote}. Go` : `${what}${timedNote}. Go`),
             beep: 'go',
             vibrate: [250],
           };
@@ -73,7 +76,7 @@ function rawCue(ev: RunEvent, steps: Step[], settings: Settings): Cue | null {
           const next = nextWorkStep(steps, ev.index);
           const lead = step.kind === 'roundRest' ? 'Round complete. Rest' : 'Rest';
           return {
-            speech: next ? `${lead} ${formatShort(step.durationSec)}. Next, ${next.label}` : lead,
+            speech: next ? `${lead} ${formatSpoken(step.durationSec)}. Next, ${next.label}` : lead,
             beep: 'rest',
             vibrate: [100, 80, 100],
           };

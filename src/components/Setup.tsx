@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { EXAMPLE_ROUTINES } from '../engine/examples';
+import { templateOfDay } from '../engine/templates';
 import { lastDone } from '../engine/history';
 import type { GoalProgress, HistoryEntry } from '../engine/history';
 import { buildSteps, formatClock, hasRepSets, totalSeconds } from '../engine/plan';
@@ -9,9 +10,10 @@ import { LIMITS } from '../engine/types';
 import type { DistanceUnit, Exercise, Routine, WeightUnit } from '../engine/types';
 import { S } from '../strings';
 import { GoalCard } from './GoalCard';
-import { DistanceField, KindToggle, RepsField } from './RepsField';
+import { DistanceField, KindToggle, RepsField, RepsTimeLimit } from './RepsField';
 import { RoutineEditor } from './RoutineEditor';
 import { TimingFields, WeightInput } from './RoutineFields';
+import { TemplateCard, TemplateLibrary } from './TemplateLibrary';
 import { TimeField } from './TimeField';
 
 interface Props {
@@ -28,6 +30,8 @@ interface Props {
   onUpsert: (r: Routine) => void;
   onDeleteSaved: (id: string) => void;
   onAddExamples: () => void;
+  /** Copy a starter routine into the library. */
+  onAddTemplate: (r: Routine) => void;
 }
 
 const WORK_PRESETS = [10, 20, 30, 45, 60];
@@ -62,13 +66,26 @@ function copyOf(r: Routine): Routine {
   return { ...r, id: newId(), name: cleanName(`${r.name} (${S.copySuffix})`, S.defaultRoutineName), exercises: fresh(r.exercises), warmup: fresh(r.warmup), cooldown: fresh(r.cooldown) };
 }
 
-export function Setup({ state, saved, history, goal, unit, distUnit, onState, onStart, onUpsert, onDeleteSaved, onAddExamples }: Props) {
+export function Setup({ state, saved, history, goal, unit, distUnit, onState, onStart, onUpsert, onDeleteSaved, onAddExamples, onAddTemplate }: Props) {
   const { mode } = state;
   const setMode = (m: Mode) => onState({ ...state, mode: m });
   // null = closed; { routine, isNew } = editor open
   const [editing, setEditing] = useState<{ routine: Routine; isNew: boolean } | null>(null);
+  const [library, setLibrary] = useState(false);
   const now = Date.now();
   const shown = sortRoutines(saved, history, state.sort, now);
+  const today = templateOfDay(saved, new Date(now));
+  const todayBlock = today && (
+    <section className="field" aria-label={S.tryToday}>
+      <div className="fieldHead">
+        <span className="fieldLabel">{S.tryToday}</span>
+      </div>
+      <ul className="tplList" data-testid="try-today">
+        <TemplateCard tpl={today} saved={saved} onAdd={onAddTemplate} today />
+      </ul>
+      <p className="muted">{S.tryTodayHint}</p>
+    </section>
+  );
   const missingExamples = EXAMPLE_ROUTINES.some((e) => !saved.some((s) => s.id === e.id));
   const sorts: [RoutineSort, string][] = [
     ['recent', S.sortRecent],
@@ -92,6 +109,7 @@ export function Setup({ state, saved, history, goal, unit, distUnit, onState, on
         <QuickSetup state={state} unit={unit} distUnit={distUnit} onState={onState} onStart={onStart} />
       ) : (
         <>
+          {saved.length === 0 && todayBlock}
           {saved.length === 0 ? (
             <p className="field muted" data-testid="no-routines">
               {S.noRoutines}
@@ -125,21 +143,30 @@ export function Setup({ state, saved, history, goal, unit, distUnit, onState, on
                           {last.at === null ? S.lastDoneNever : S.lastDone(relativeDay(last.at, now), last.recent)}
                         </span>
                       </button>
-                      <button className="btn btnPrimary rcStart" onClick={() => onStart(rt)} aria-label={S.startNamed(rt.name)}>
-                        {S.start}
-                      </button>
+                      <div className="rcSide">
+                        <button className="btn btnPrimary rcStart" onClick={() => onStart(rt)} aria-label={S.startNamed(rt.name)}>
+                          {S.start}
+                        </button>
+                        <button className="btn btnSmall" disabled={saved.length >= LIMITS.maxSavedRoutines} onClick={() => onUpsert(copyOf(rt))} aria-label={S.duplicateNamed(rt.name)}>
+                          {S.duplicate}
+                        </button>
+                      </div>
                     </li>
                   );
                 })}
               </ul>
             </>
           )}
+          {saved.length > 0 && todayBlock}
           <button
             className="btn addBtn"
             disabled={saved.length >= LIMITS.maxSavedRoutines}
             onClick={() => setEditing({ routine: { ...defaultRoutine(), id: newId(), name: S.newRoutine }, isNew: true })}
           >
             + {S.newRoutine}
+          </button>
+          <button className="btn btnGhostDark" onClick={() => setLibrary(true)}>
+            {S.browseTemplates}
           </button>
           {missingExamples && (
             <button className="btn btnGhostDark" onClick={onAddExamples}>
@@ -148,6 +175,8 @@ export function Setup({ state, saved, history, goal, unit, distUnit, onState, on
           )}
         </>
       )}
+
+      {library && <TemplateLibrary saved={saved} onAdd={onAddTemplate} onClose={() => setLibrary(false)} />}
 
       {editing && (
         <RoutineEditor
@@ -206,7 +235,15 @@ function QuickSetup({ state, unit, distUnit, onState, onStart }: { state: AppSta
         <KindToggle value={q0.kind ?? 'timed'} onChange={(kind) => patch({ exercises: [{ ...q0, kind }] })} />
       </div>
       {q0.kind === 'reps' ? (
-        <RepsField value={q0.reps ?? 10} onChange={(reps) => patch({ exercises: [{ ...q0, reps }] })} />
+        <>
+          <RepsField value={q0.reps ?? 10} onChange={(reps) => patch({ exercises: [{ ...q0, reps }] })} />
+          <RepsTimeLimit
+            timed={q0.timed === true}
+            workSec={q0.workSec}
+            onTimed={(on) => patch({ exercises: [{ ...q0, timed: on ? true : undefined }] })}
+            onSec={(sec) => patch({ exercises: [{ ...q0, workSec: sec }] })}
+          />
+        </>
       ) : q0.kind === 'distance' ? (
         <DistanceField value={q0.distance ?? 5} unit={distUnit} onChange={(distance) => patch({ exercises: [{ ...q0, distance }] })} />
       ) : (

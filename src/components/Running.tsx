@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cueFor } from '../engine/cues';
 import { createWakeLock, performCue, stopSpeaking } from '../engine/device';
-import { buildSteps, formatClock, formatShort } from '../engine/plan';
+import { buildSteps, formatClock, formatShort, hasRepSets } from '../engine/plan';
 import { Runner } from '../engine/runner';
 import { LIMITS } from '../engine/types';
 import type { RunEvent, RunResult, Routine, Settings } from '../engine/types';
@@ -83,11 +83,15 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
   const next = steps[runner.index + 1];
   const untimed = runner.untimed;
   // A reps set has no countdown: count what is left of its estimate (never below 0).
-  const currentLeft = untimed ? Math.max(0, step.durationSec - runner.elapsedSec()) : runner.remainingMs() / 1000;
+  const currentLeft = untimed ? Math.max(0, step.durationSec - runner.elapsedSec()) : Math.max(0, runner.remainingMs() / 1000);
   const leftTotal = steps.slice(runner.index + 1).reduce((a, s) => a + s.durationSec, 0) + currentLeft;
-  const anyReps = steps.some((s) => s.reps !== undefined || s.distance !== undefined);
+  const anyReps = hasRepSets(steps);
   const isDistance = step.distance !== undefined;
-  const repsNow = untimed ? (adj && adj.idx === runner.index ? adj.n : (step.reps ?? step.distance ?? 0)) : 0;
+  // Timed reps keep their countdown but also ask for the reps done, so they need the stepper too.
+  const hasAmount = step.reps !== undefined || step.distance !== undefined;
+  const timedReps = step.reps !== undefined && step.timedSec !== undefined;
+  const awaiting = runner.awaitingReps;
+  const repsNow = hasAmount ? (adj && adj.idx === runner.index ? adj.n : (step.reps ?? step.distance ?? 0)) : 0;
   // Reps move in whole numbers, distances in hundredths.
   const setReps = (n: number) =>
     setAdj({
@@ -152,7 +156,7 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
           </div>
         </div>
       ) : (
-      <div className="ringWrap">
+      <div className={`ringWrap${timedReps ? ' ringWrapSmall' : ''}`}>
         <svg className="ring" viewBox="0 0 200 200" aria-hidden="true">
           <circle className="ringTrack" cx="100" cy="100" r={R} />
           <circle
@@ -168,6 +172,27 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
           {sec >= 600 ? formatClock(sec) : String(sec)}
         </div>
       </div>
+      )}
+
+      {timedReps && (
+        <div className="repsPanel repsPanelCompact" data-testid="reps-panel">
+          {awaiting && (
+            <p className="timeUp" role="alert" data-testid="time-up">
+              {S.timeUpPrompt}
+            </p>
+          )}
+          <div className="repsAdjust">
+            <button className="roundBtn roundBtnSmall" onClick={() => setReps(repsNow - 1)} aria-label={S.repsMinus}>
+              −
+            </button>
+            <span className="repsBigSmall" data-testid="reps-now" aria-live="polite">
+              {shownAmount} <span className="repsUnit">{S.repsUnit}</span>
+            </span>
+            <button className="roundBtn roundBtnSmall" onClick={() => setReps(repsNow + 1)} aria-label={S.repsPlus}>
+              +
+            </button>
+          </div>
+        </div>
       )}
 
       <div className="runNext">
@@ -197,14 +222,14 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
         </button>
       </div>
       <div className="runExtra">
-        {untimed && (
+        {hasAmount && (
           <button className="btn btnDone" onClick={() => act(runner.completeSet(repsNow))}>
-            {S.done}
+            {awaiting ? S.logReps : S.done}
           </button>
         )}
         {!untimed && phase !== 'prep' && (
           <button className="btn btnGhost" onClick={() => runner.addTime(10)}>
-            {S.addTen}
+            {awaiting ? S.moreTime : S.addTen}
           </button>
         )}
         {runner.canAddExtraSet() && (

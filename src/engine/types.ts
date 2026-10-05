@@ -17,6 +17,14 @@ export interface Exercise {
   weight?: number;
   /** Target distance for run/walk exercises, in the distance unit chosen in Settings. */
   distance?: number;
+  /** Reps exercises only: also run a countdown of workSec. When time is up the app asks how many reps were done. */
+  timed?: boolean;
+  /** Rest after this exercise, in seconds. Undefined = the routine's default for that spot. */
+  restAfterSec?: number;
+  /** Exercises that are next to each other and share a group id form a superset (A, B, C, A, B, C ...). */
+  group?: string;
+  /** Superset only, read from the first exercise of the group: how many times the group is played per round. */
+  sets?: number;
 }
 
 /** One workout. Quick mode is a Routine with a single exercise. */
@@ -54,6 +62,10 @@ export interface Step {
   section?: Section;
   /** Extra weight for this set, if any. */
   weight?: number;
+  /** Reps set with a countdown: the length of it. The step then ends when time is up and the reps are confirmed. */
+  timedSec?: number;
+  /** Steps of one pass through a superset share this number (rests inside it too). */
+  setId?: number;
   /** Added mid-workout with "Extra set"; never counts toward rounds done. */
   extra?: boolean;
 }
@@ -98,6 +110,8 @@ export type RunEvent =
   /** sec = whole seconds left; total = length of the current step in seconds. */
   | { type: 'countdown'; sec: number; total: number }
   | { type: 'halfway' }
+  /** A timed reps set ran out of time and is waiting for the user to say how many reps they did. */
+  | { type: 'timeUp' }
   | { type: 'finish' };
 
 export const LIMITS = {
@@ -112,6 +126,7 @@ export const LIMITS = {
   maxSectionExercises: 10,
   maxWeight: 999,
   maxNote: 300,
+  maxSets: 20,
 } as const;
 
 /** What a run actually completed (for the workout log). */

@@ -175,7 +175,7 @@ describe('cueFor', () => {
   });
   it('voice mode speaks the exercise and next', () => {
     expect(cueFor({ type: 'stepStart', index: 1 }, steps, s({}))?.speech).toBe('Squats. Go');
-    expect(cueFor({ type: 'stepStart', index: 2 }, steps, s({}))?.speech).toBe('Rest 10s. Next, Lunges');
+    expect(cueFor({ type: 'stepStart', index: 2 }, steps, s({}))?.speech).toBe('Rest 10 seconds. Next, Lunges');
   });
   it('beeps mode never speaks', () => {
     const c = cueFor({ type: 'stepStart', index: 1 }, steps, s({ sound: 'beeps' }));

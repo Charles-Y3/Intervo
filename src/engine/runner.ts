@@ -16,6 +16,7 @@ export class Runner {
   /** Reps confirmed with Done, per step (0 = not done). */
   private repsDone: number[];
   private setDone: boolean[];
+  private timeUpFired = false;
 
   constructor(
     readonly steps: Step[],
@@ -30,7 +31,13 @@ export class Runner {
 
   /** The current step has no countdown: it ends when the user taps Done. */
   get untimed(): boolean {
-    return this.step.reps !== undefined || this.step.distance !== undefined;
+    return (this.step.reps !== undefined || this.step.distance !== undefined) && this.step.timedSec === undefined;
+  }
+
+  /** A timed reps set whose time ran out: it waits (never advances on its own) until the user
+   * says how many reps they did, or adds more time. */
+  get awaitingReps(): boolean {
+    return !this.done && this.step.timedSec !== undefined && this.remainingMs() <= 0;
   }
 
   get paused(): boolean {
@@ -105,7 +112,7 @@ export class Runner {
 
   /** User tapped Done on a reps or distance set: log the amount and move on (or finish). */
   completeSet(amount: number): RunEvent[] {
-    if (this.done || !this.untimed) return [];
+    if (this.done || (this.step.reps === undefined && this.step.distance === undefined)) return [];
     this.snap();
     // Reps are whole numbers; distances keep two decimals.
     this.repsDone[this.index] = this.step.distance !== undefined ? Math.max(0, Math.round(amount * 100) / 100) : Math.max(0, Math.round(amount));
@@ -119,6 +126,8 @@ export class Runner {
   canAddExtraSet(): boolean {
     if (this.done) return false;
     const k = this.step.kind;
+    // A rest inside a superset pass: the pass is not finished, so it cannot be repeated yet.
+    if ((k === 'rest' || k === 'roundRest') && this.step.setId !== undefined) return false;
     const last = this.index >= this.steps.length - 1;
     return (k === 'rest' || k === 'roundRest' || last) && this.lastWorkIndex() >= 0;
   }
@@ -132,12 +141,28 @@ export class Runner {
   addExtraSet(): void {
     if (!this.canAddExtraSet()) return;
     const w = this.steps[this.lastWorkIndex()];
-    const extra: Step = { ...w, extra: true, section: undefined };
+    // A superset repeats as a whole pass (every exercise of it, and the rests between them).
+    let from = this.lastWorkIndex();
+    let to = from;
+    let freshSetId: number | undefined;
+    if (w.setId !== undefined) {
+      for (let i = 0; i < this.steps.length; i++) {
+        if (this.steps[i].setId === w.setId) {
+          from = Math.min(from, i);
+          to = Math.max(to, i);
+        }
+      }
+      freshSetId = Math.max(...this.steps.map((st) => st.setId ?? 0)) + 1;
+    }
+    const copies: Step[] = this.steps.slice(from, to + 1).map((st) => {
+      const c: Step = { ...st, extra: st.kind === 'work' ? true : undefined, section: undefined };
+      if (freshSetId !== undefined) c.setId = freshSetId;
+      return c;
+    });
     const inRest = this.step.kind === 'rest' || this.step.kind === 'roundRest';
     const restSec = inRest ? this.step.durationSec : this.lastRestSec();
-    const items: Step[] = inRest
-      ? [extra, { kind: 'rest', durationSec: restSec, label: 'Rest', round: w.round, exerciseIndex: -1 }]
-      : [{ kind: 'rest', durationSec: restSec, label: 'Rest', round: w.round, exerciseIndex: -1 }, extra];
+    const restStep: Step = { kind: 'rest', durationSec: restSec, label: 'Rest', round: w.round, exerciseIndex: -1 };
+    const items: Step[] = inRest ? [...copies, restStep] : [restStep, ...copies];
     this.steps.splice(this.index + 1, 0, ...items);
     this.best.splice(this.index + 1, 0, ...items.map(() => 0));
     this.repsDone.splice(this.index + 1, 0, ...items.map(() => 0));
@@ -150,7 +175,11 @@ export class Runner {
   }
 
   addTime(sec: number): void {
+    // After time ran out the new time starts from now, not from the moment it ran out.
+    if (this.awaitingReps) this.extraMs = (this.pausedAt ?? this.now()) - this.startedAt - this.step.durationSec * 1000;
     this.extraMs += sec * 1000;
+    this.timeUpFired = false;
+    this.lastSec = Infinity;
   }
 
   /** Advance with the clock. Call often; safe to call rarely. */
@@ -161,6 +190,8 @@ export class Runner {
     for (;;) {
       const rem = this.remainingMs();
       if (rem > 0) break;
+      // Timed reps wait here for the user's rep count instead of moving on.
+      if (this.step.timedSec !== undefined) break;
       if (this.index >= this.steps.length - 1) return this.finish();
       const stepEnd = this.startedAt + this.step.durationSec * 1000 + this.extraMs;
       this.best[this.index] = this.step.durationSec;
@@ -170,6 +201,13 @@ export class Runner {
     // Only the step we landed in is announced; steps skipped by a freeze stay silent.
     if (entered) events.push({ type: 'stepStart', index: this.index });
     if (this.untimed) return events; // reps sets have no countdown, 3-2-1 or halfway
+    if (this.awaitingReps) {
+      if (!this.timeUpFired) {
+        this.timeUpFired = true;
+        events.push({ type: 'timeUp' });
+      }
+      return events;
+    }
 
     const sec = this.remainingSec();
     const total = this.step.durationSec + this.extraMs / 1000;
@@ -203,7 +241,7 @@ export class Runner {
       .map(({ st, i }) => ({
         name: st.label,
         round: st.round,
-        plannedSec: st.reps !== undefined || st.distance !== undefined ? 0 : st.durationSec,
+        plannedSec: (st.reps !== undefined || st.distance !== undefined) && st.timedSec === undefined ? 0 : st.durationSec,
         sec: Math.round(this.best[i] * 10) / 10,
         complete: st.reps !== undefined || st.distance !== undefined ? this.setDone[i] : this.best[i] >= st.durationSec - 0.05,
         targetReps: st.reps ?? 0,
@@ -246,5 +284,6 @@ export class Runner {
     this.extraMs = 0;
     this.lastSec = Infinity;
     this.halfwayFired = false;
+    this.timeUpFired = false;
   }
 }

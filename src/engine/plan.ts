@@ -1,3 +1,4 @@
+import { LIMITS } from './types';
 import type { Exercise, Routine, Section, Step } from './types';
 
 /** Flatten a routine into the exact sequence of countdowns to run.
@@ -13,8 +14,13 @@ function workStep(ex: Exercise, round: number, exerciseIndex: number, section?: 
   const base: Step = { kind: 'work', durationSec: ex.workSec, label: ex.name, round, exerciseIndex };
   if (ex.kind === 'reps') {
     const reps = ex.reps ?? 10;
-    base.durationSec = reps * SEC_PER_REP_ESTIMATE;
     base.reps = reps;
+    if (ex.timed === true) {
+      // Reps against the clock: a real countdown, then the app asks how many reps were done.
+      base.timedSec = ex.workSec;
+    } else {
+      base.durationSec = reps * SEC_PER_REP_ESTIMATE;
+    }
   }
   if (ex.kind === 'distance') {
     const distance = ex.distance ?? 5;
@@ -26,46 +32,97 @@ function workStep(ex: Exercise, round: number, exerciseIndex: number, section?: 
   return base;
 }
 
+export interface ExerciseBlock {
+  from: number;
+  /** Inclusive. */
+  to: number;
+  /** Two or more neighbours sharing a group id. */
+  superset: boolean;
+}
+
+/** Split a list into single exercises and supersets (runs of 2+ neighbours with the same group id). */
+export function exerciseBlocks(list: Exercise[]): ExerciseBlock[] {
+  const blocks: ExerciseBlock[] = [];
+  let i = 0;
+  while (i < list.length) {
+    let j = i;
+    const g = list[i].group;
+    if (g) while (j + 1 < list.length && list[j + 1].group === g) j++;
+    blocks.push({ from: i, to: j, superset: j > i });
+    i = j + 1;
+  }
+  return blocks;
+}
+
+/** How many times a superset is played per round (stored on its first exercise). */
+export function groupSets(list: Exercise[], block: ExerciseBlock): number {
+  if (!block.superset) return 1;
+  const n = Math.round(list[block.from].sets ?? 1);
+  return Math.min(LIMITS.maxSets, Math.max(1, Number.isFinite(n) ? n : 1));
+}
+
 export function buildSteps(r: Routine): Step[] {
   const steps: Step[] = [];
   if (r.prepSec > 0) {
     steps.push({ kind: 'prep', durationSec: r.prepSec, label: 'Get ready', round: 0, exerciseIndex: -1 });
   }
   const betweenSec = r.restBetweenExercisesSec;
-  const rest = (round: number): Step => ({ kind: 'rest', durationSec: betweenSec, label: 'Rest', round, exerciseIndex: -1 });
+  const rest = (sec: number, round: number, kind: 'rest' | 'roundRest' = 'rest', setId?: number): void => {
+    if (sec <= 0) return;
+    const st: Step = { kind, durationSec: sec, label: 'Rest', round, exerciseIndex: -1 };
+    if (setId !== undefined) st.setId = setId;
+    steps.push(st);
+  };
 
   // A block of exercises (warm-up or cool-down): short rests between them.
   const block = (list: Exercise[] | undefined, section: Section, round: number) => {
     (list ?? []).forEach((ex, i, all) => {
       steps.push(workStep(ex, round, i, section));
-      if (i < all.length - 1 && betweenSec > 0) steps.push(rest(round));
+      if (i < all.length - 1) rest(ex.restAfterSec ?? betweenSec, round);
     });
   };
 
   block(r.warmup, 'warmup', 0);
-  if (r.warmup?.length && betweenSec > 0) steps.push(rest(0));
+  if (r.warmup?.length) rest(r.warmup[r.warmup.length - 1].restAfterSec ?? betweenSec, 0);
 
-  const lastExercise = r.exercises.length - 1;
+  const blocks = exerciseBlocks(r.exercises);
+  let setCounter = 0;
   for (let round = 1; round <= r.rounds; round++) {
-    r.exercises.forEach((ex, i) => {
-      steps.push(workStep(ex, round, i));
-      if (i < lastExercise) {
-        if (betweenSec > 0) steps.push(rest(round));
-      } else if (round < r.rounds && r.restBetweenRoundsSec > 0) {
-        steps.push({ kind: 'roundRest', durationSec: r.restBetweenRoundsSec, label: 'Rest', round, exerciseIndex: -1 });
+    blocks.forEach((b, bi) => {
+      const members = r.exercises.slice(b.from, b.to + 1);
+      const sets = groupSets(r.exercises, b);
+      const lastBlock = bi === blocks.length - 1;
+      for (let set = 1; set <= sets; set++) {
+        const setId = b.superset ? ++setCounter : undefined;
+        members.forEach((ex, mi) => {
+          const st = workStep(ex, round, b.from + mi);
+          if (setId !== undefined) st.setId = setId;
+          steps.push(st);
+          if (mi < members.length - 1) {
+            // Inside a superset the exercises follow each other; rest only if asked for.
+            rest(ex.restAfterSec ?? 0, round, 'rest', setId);
+          } else if (set < sets) {
+            rest(ex.restAfterSec ?? betweenSec, round);
+          } else if (!lastBlock) {
+            rest(ex.restAfterSec ?? betweenSec, round);
+          } else if (round < r.rounds) {
+            rest(ex.restAfterSec ?? r.restBetweenRoundsSec, round, 'roundRest');
+          }
+        });
       }
     });
   }
 
   if (r.cooldown?.length) {
-    if (betweenSec > 0) steps.push(rest(r.rounds));
+    const lastMain = r.exercises[r.exercises.length - 1];
+    rest(lastMain?.restAfterSec ?? betweenSec, r.rounds);
     block(r.cooldown, 'cooldown', r.rounds);
   }
   return steps;
 }
 
 export function hasRepSets(steps: Step[]): boolean {
-  return steps.some((s) => s.reps !== undefined || s.distance !== undefined);
+  return steps.some((s) => (s.reps !== undefined || s.distance !== undefined) && s.timedSec === undefined);
 }
 
 export function totalSeconds(steps: Step[]): number {
@@ -87,6 +144,17 @@ export function formatShort(totalSec: number): string {
   const m = Math.floor(s / 60);
   const rem = s % 60;
   return rem === 0 ? `${m}m` : `${m}m ${rem}s`;
+}
+
+/** Words for the speech engine: "2m" is read as "two meters", so say "2 minutes" instead. */
+export function formatSpoken(totalSec: number): string {
+  const s = Math.max(0, Math.round(totalSec));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  const parts: string[] = [];
+  if (m > 0) parts.push(`${m} ${m === 1 ? 'minute' : 'minutes'}`);
+  if (rem > 0 || m === 0) parts.push(`${rem} ${rem === 1 ? 'second' : 'seconds'}`);
+  return parts.join(' ');
 }
 
 /** The next work step after index (for "up next"), or undefined. */

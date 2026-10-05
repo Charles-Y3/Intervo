@@ -38,7 +38,15 @@ export function RoutineEditor({ initial, isNew, unit, distUnit, onSave, onSaveAn
         <input className="textInput" aria-label={S.routineName} value={draft.name} maxLength={LIMITS.maxNameLength} onChange={(e) => patch({ name: e.target.value })} />
       </label>
 
-      <ExerciseList exercises={draft.exercises} unit={unit} distUnit={distUnit} onChange={(exercises) => patch({ exercises })} />
+      <ExerciseList
+        exercises={draft.exercises}
+        unit={unit}
+        distUnit={distUnit}
+        allowGroups
+        restDefault={draft.restBetweenExercisesSec}
+        lastRestDefault={draft.rounds > 1 ? draft.restBetweenRoundsSec : draft.cooldown?.length ? draft.restBetweenExercisesSec : undefined}
+        onChange={(exercises) => patch({ exercises })}
+      />
       <TimingFields r={draft} patch={patch} multi />
 
       <ExerciseList
@@ -49,6 +57,8 @@ export function RoutineEditor({ initial, isNew, unit, distUnit, onSave, onSaveAn
         minCount={0}
         maxCount={LIMITS.maxSectionExercises}
         exercises={draft.warmup ?? []}
+        restDefault={draft.restBetweenExercisesSec}
+        lastRestDefault={draft.restBetweenExercisesSec}
         unit={unit}
         distUnit={distUnit}
         onChange={(warmup) => patch({ warmup })}
@@ -61,6 +71,7 @@ export function RoutineEditor({ initial, isNew, unit, distUnit, onSave, onSaveAn
         minCount={0}
         maxCount={LIMITS.maxSectionExercises}
         exercises={draft.cooldown ?? []}
+        restDefault={draft.restBetweenExercisesSec}
         unit={unit}
         distUnit={distUnit}
         onChange={(cooldown) => patch({ cooldown })}

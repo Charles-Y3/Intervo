@@ -27,7 +27,14 @@ Interval timer PWA for exercise (work / rest / rounds, voice or silent). English
 - Quick mode is a Routine with exactly one exercise; one engine for both modes.
 - The service worker uses `registerType: 'prompt'` so an update never swaps in mid-workout.
 - The ONLY network traffic is workout reminders (same-origin `/api/push/*`), and only after the user turns them on. Sent: push address, time, weekdays, time zone. Keep `connect-src 'self'`. Server code in `api/` (Vercel functions, imports end in `.js`): endpoints must be https on an allowlisted push service (SSRF), `x-cron-secret` is required (fails closed), table capped. Setup: docs/REMINDERS_SETUP.md. Service worker is `src/sw.ts` (injectManifest).
-- Tests must be proven to fail on a deliberately broken build (done for: trailing rest, no catch-up, unclamped rounds, silent every-second counting, counting during rest, swapped voice gender).
+- Tests must be proven to fail on a deliberately broken build (done for: trailing rest, no catch-up, unclamped rounds, silent every-second counting, counting during rest, swapped voice gender, speaking "2m", timed reps auto-advancing, superset Extra set copying one exercise, ignoring per-exercise rest, unreadable notes box).
+
+- Spoken text is built from `formatSpoken()` ("2 minutes"), never from `formatShort()` ("2m", which the voice reads as "two meters"). `formatShort` is for the screen only.
+- Timed reps: a reps exercise with `timed: true` has `Step.timedSec` (a real countdown on top of the target reps). When time runs out the runner does NOT advance (`Runner.awaitingReps`, one `timeUp` event): the screen asks how many reps, pre-filled with the target; `Log reps` confirms, `+10 s more time` restarts a 10 s countdown. Even as the last step it waits. Timed reps are exact (no "≈"); plain reps/distance stay untimed estimates.
+- Per-exercise rest: `Exercise.restAfterSec` (undefined = default for that spot: between exercises, between rounds for the last exercise of a round, 0 inside a superset). Editor: "Rest ..." button opens a sheet (presets, custom, none, back to default).
+- Supersets: neighbours sharing `Exercise.group` (2 or more) form a superset (`exerciseBlocks()` in plan.ts); `sets` is stored on the FIRST exercise and is how many times the pass A,B,C is played per round. Steps of one pass share `Step.setId`; Extra set repeats the whole pass (and is refused during a rest inside a pass). `normalizeGroups()` (storage.ts) drops lone groups and runs after every list edit, so dragging an exercise out of a group quietly unlinks it. No supersets in warm-up/cool-down. Dragging moves ONE exercise, not the whole group.
+- Starter library (`engine/templates.ts`): fixed-id templates, copied through `sanitizeRoutine`; "Try today" picks one per local day (no network); Duplicate button on each routine card.
+- Dark mode: `textarea` must be in the `color: inherit` rule (it was missing and the notes box was dark text on a dark box). The e2e test measures contrast.
 
 ## Commands
 `npm run dev` (use a free port, e.g. `-- --port 5190`) | `npm run build` | `npm test` | `npm run test:e2e` | `npm run icons`

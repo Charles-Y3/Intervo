@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { LIMITS } from '../engine/types';
 import type { DistanceUnit, ExerciseKind } from '../engine/types';
 import { S } from '../strings';
+import { TimeField } from './TimeField';
 
 /** Number input for reps. Keeps its own text so the box can be emptied while
  * typing; only valid values (1 to 999) are passed up, and it snaps back on blur. */
@@ -92,6 +93,27 @@ export function RepsField({ value, onChange }: { value: number; onChange: (n: nu
       </div>
       <RepsInput value={value} onChange={onChange} label={S.repsTyped} />
       <p className="muted">{S.repsHint}</p>
+    </div>
+  );
+}
+
+/** Quick mode: optionally run a countdown on a reps set. When it ends the app asks for the reps done. */
+export function RepsTimeLimit({ timed, workSec, onTimed, onSec }: { timed: boolean; workSec: number; onTimed: (on: boolean) => void; onSec: (sec: number) => void }) {
+  return (
+    <div className="field">
+      <div className="fieldHead">
+        <span className="fieldLabel">{S.timeLimit}</span>
+      </div>
+      <div className="chips">
+        <button className={`chip${!timed ? ' chipOn' : ''}`} aria-pressed={!timed} onClick={() => onTimed(false)}>
+          {S.timeLimitOff}
+        </button>
+        <button className={`chip${timed ? ' chipOn' : ''}`} aria-pressed={timed} onClick={() => onTimed(true)}>
+          {S.timeLimitOn}
+        </button>
+      </div>
+      {timed && <TimeField label={S.timeLimitLabel(S.kindReps)} big value={workSec} presets={[20, 30, 45, 60, 90]} onChange={onSec} />}
+      <p className="muted">{S.timeLimitHint}</p>
     </div>
   );
 }

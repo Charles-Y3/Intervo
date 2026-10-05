@@ -1,3 +1,4 @@
+import { exerciseBlocks } from './plan';
 import { LIMITS } from './types';
 import type { CountMode, Exercise, ReminderSettings, Routine, Settings, SoundMode, ThemeChoice, VoicePref, WeightUnit, DistanceUnit } from './types';
 
@@ -91,7 +92,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 function sanitizeExercise(v: unknown, i: number): Exercise {
   const o = isRecord(v) ? v : {};
-  return {
+  const ex: Exercise = {
     id: typeof o.id === 'string' && o.id.length > 0 && o.id.length <= 40 ? o.id : newId(),
     name: cleanName(o.name, `Exercise ${i + 1}`),
     workSec: clampInt(o.workSec, 1, LIMITS.maxSeconds, 30),
@@ -100,17 +101,49 @@ function sanitizeExercise(v: unknown, i: number): Exercise {
     weight: clampWeight(o.weight),
     distance: clampDistance(o.distance, 5),
   };
+  // Optional fields are only written when they are set, so old data and backups stay as they were.
+  if (o.timed === true && ex.kind === 'reps') ex.timed = true;
+  if (o.restAfterSec !== undefined && o.restAfterSec !== null) ex.restAfterSec = clampInt(o.restAfterSec, 0, LIMITS.maxSeconds, 0);
+  if (typeof o.group === 'string' && o.group.length > 0 && o.group.length <= 40) {
+    ex.group = o.group;
+    if (o.sets !== undefined) ex.sets = clampInt(o.sets, 1, LIMITS.maxSets, 1);
+  }
+  return ex;
+}
+
+/** Supersets need two or more neighbours. A lone group id is dropped, and the sets count lives only on the first exercise. */
+export function normalizeGroups(list: Exercise[]): Exercise[] {
+  const out = list.map((e) => ({ ...e }));
+  for (const b of exerciseBlocks(out)) {
+    for (let i = b.from; i <= b.to; i++) {
+      if (!b.superset) {
+        delete out[i].group;
+        delete out[i].sets;
+      } else if (i > b.from) {
+        delete out[i].sets;
+      }
+    }
+  }
+  return out;
 }
 
 /** Optional warm-up / cool-down list: may be empty, at most 10 exercises. */
 function sanitizeBlock(v: unknown): Exercise[] {
-  return Array.isArray(v) ? v.slice(0, LIMITS.maxSectionExercises).map(sanitizeExercise) : [];
+  // Warm-up and cool-down are a plain list: no supersets there.
+  return Array.isArray(v)
+    ? v.slice(0, LIMITS.maxSectionExercises).map((x, i) => {
+        const ex = sanitizeExercise(x, i);
+        delete ex.group;
+        delete ex.sets;
+        return ex;
+      })
+    : [];
 }
 
 export function sanitizeRoutine(v: unknown, fallback: Routine): Routine {
   if (!isRecord(v)) return fallback;
   const list = Array.isArray(v.exercises) ? v.exercises.slice(0, LIMITS.maxExercises) : [];
-  const exercises = list.map(sanitizeExercise);
+  const exercises = normalizeGroups(list.map(sanitizeExercise));
   return {
     id: typeof v.id === 'string' && v.id.length > 0 && v.id.length <= 40 ? v.id : fallback.id,
     name: cleanName(v.name, fallback.name),
