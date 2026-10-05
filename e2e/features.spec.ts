@@ -5,8 +5,9 @@ import { LEG_DAY, seedHistory, seedRoutines } from './helpers';
 const cards = (page: Page) => page.getByTestId('routine-card');
 const runTop = (page: Page) => page.locator('.runTop');
 
-async function setSetting(page: Page, group: string, button: string) {
+async function setSetting(page: Page, tab: string, group: string, button: string) {
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: tab }).click();
   await page.getByRole('group', { name: group, exact: true }).getByRole('button', { name: button, exact: true }).click();
   await page.getByRole('button', { name: 'Close', exact: true }).first().click();
 }
@@ -72,7 +73,7 @@ test('weight: set on a Quick exercise, shown while running and in the log, with 
 test('units: switching to lb relabels the weight field and running screen', async ({ page }) => {
   await page.clock.install();
   await page.goto('/');
-  await setSetting(page, 'Weight unit', 'lb');
+  await setSetting(page, 'Workout', 'Weight unit', 'lb');
   await expect(page.getByLabel('Extra weight (optional)', { exact: true })).toHaveAttribute('placeholder', 'lb');
   await page.getByLabel('Extra weight (optional)', { exact: true }).fill('20');
   await page.getByRole('group', { name: 'Get ready' }).getByRole('button', { name: 'None' }).click();
@@ -175,7 +176,7 @@ test('weekly goal card counts finished workouts and shows the streak', async ({ 
   await page.clock.install();
   await page.goto('/');
   await expect(page.getByTestId('goal-card')).toHaveCount(0); // off by default
-  await setSetting(page, 'Weekly goal', '2');
+  await setSetting(page, 'Workout', 'Weekly goal', '2');
   await expect(page.getByTestId('goal-progress')).toHaveText('0 of 2 workouts');
   await expect(page.getByTestId('goal-streak')).toContainText('Reach your goal');
 
@@ -229,6 +230,7 @@ test('backup: export downloads a valid file with everything in it', async ({ pag
   await seedHistory(page, [{ id: 'h1', daysAgo: 1, routineId: 'leg', routineName: 'Leg day', note: 'solid' }]);
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: 'General' }).click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save backup file' }).click()]);
   expect(download.suggestedFilename()).toMatch(/^intervo-backup-\d{4}-\d{2}-\d{2}\.json$/);
   const path = await download.path();
@@ -262,6 +264,7 @@ test('restore: merge adds what is missing and keeps what is here', async ({ page
   await seedRoutines(page, [LEG_DAY]);
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: 'General' }).click();
   await page.getByLabel('Backup file').setInputFiles({ name: 'b.json', mimeType: 'application/json', buffer: backupFile() });
   const sheet = page.getByRole('dialog', { name: 'Restore backup' });
   await expect(sheet).toContainText('2 routines and 1 workouts');
@@ -278,6 +281,7 @@ test('restore: replace asks first, then swaps everything including settings', as
   await seedRoutines(page, [LEG_DAY]);
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: 'General' }).click();
   await page.getByLabel('Backup file').setInputFiles({ name: 'b.json', mimeType: 'application/json', buffer: backupFile() });
   const sheet = page.getByRole('dialog', { name: 'Restore backup' });
   await sheet.getByRole('button', { name: 'Replace everything' }).click();
@@ -288,7 +292,9 @@ test('restore: replace asks first, then swaps everything including settings', as
   await page.getByRole('dialog', { name: 'Restore backup' }).getByRole('button', { name: 'Replace everything' }).click();
   await page.getByRole('dialog', { name: 'Replace everything on this phone?' }).getByRole('button', { name: 'Replace everything' }).click();
   await expect(page.getByText('Backup restored.')).toBeVisible();
+  await page.getByRole('tab', { name: 'Workout' }).click();
   await expect(page.getByRole('group', { name: 'Weight unit' }).getByRole('button', { name: 'lb' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('tab', { name: 'Sound' }).click();
   await expect(page.getByRole('group', { name: 'Sound', exact: true }).getByRole('button', { name: 'Beeps' })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Close', exact: true }).first().click();
   await expect(cards(page)).toHaveCount(2);
@@ -301,6 +307,7 @@ test('restore: bad files are rejected with a message and change nothing', async 
   await seedRoutines(page, [LEG_DAY]);
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: 'General' }).click();
   const input = page.getByLabel('Backup file');
   await input.setInputFiles({ name: 'x.json', mimeType: 'application/json', buffer: Buffer.from('this is not json') });
   await expect(page.getByRole('alert')).toContainText('not a readable backup');
@@ -314,6 +321,7 @@ test('restore: bad files are rejected with a message and change nothing', async 
 test('restore: hostile contents are sanitized, not trusted', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: 'General' }).click();
   const evil = backupFile({
     saved: [{ id: 'e', name: '<img src=x onerror=alert(1)>', rounds: 1e9, exercises: 'no' }],
     settings: { sound: 'loud', weeklyGoal: 1e9, units: 'stone' },

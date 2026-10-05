@@ -16,7 +16,16 @@ interface Props {
   backup: { data: BackupData; onRestore: (next: BackupData) => void };
 }
 
+type Tab = 'sound' | 'workout' | 'reminders' | 'general';
+
 export function SettingsSheet({ settings, onChange, onClose, backup }: Props) {
+  const [tab, setTab] = useState<Tab>('sound');
+  const tabs: [Tab, string][] = [
+    ['sound', S.tabSound],
+    ['workout', S.tabWorkout],
+    ['reminders', S.tabReminders],
+    ['general', S.tabGeneral],
+  ];
   const set = (p: Partial<Settings>) => onChange({ ...settings, ...p });
   const sounds: [SoundMode, string][] = [
     ['voice', S.soundVoice],
@@ -52,6 +61,17 @@ export function SettingsSheet({ settings, onChange, onClose, backup }: Props) {
 
   return (
     <Sheet title={S.settings} onClose={onClose}>
+      <div className="tabBar" role="tablist" aria-label={S.settingsSections}>
+        {tabs.map(([id, label]) => (
+          <button key={id} role="tab" id={`settings-tab-${id}`} aria-selected={tab === id} aria-controls="settings-panel" className={`seg${tab === id ? ' segOn' : ''}`} onClick={() => setTab(id)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`} className="tabPanel">
+      {tab === 'sound' && (
+      <>
       <div className="field">
         <div className="fieldLabel">{S.sound}</div>
         <div className="chips" role="group" aria-label={S.sound}>
@@ -153,7 +173,11 @@ export function SettingsSheet({ settings, onChange, onClose, backup }: Props) {
         />
       </label>
       {!vib && <p className="muted">{S.vibrateUnsupported}</p>}
+      </>
+      )}
 
+      {tab === 'workout' && (
+      <>
       <div className="field">
         <div className="fieldLabel">{S.weeklyGoal}</div>
         <div className="chips" role="group" aria-label={S.weeklyGoal}>
@@ -164,8 +188,6 @@ export function SettingsSheet({ settings, onChange, onClose, backup }: Props) {
           ))}
         </div>
       </div>
-
-      <RemindersSection reminder={settings.reminder} onChange={(reminder) => set({ reminder })} />
 
       <div className="field">
         <div className="fieldLabel">{S.units}</div>
@@ -178,6 +200,13 @@ export function SettingsSheet({ settings, onChange, onClose, backup }: Props) {
         </div>
       </div>
 
+      </>
+      )}
+
+      {tab === 'reminders' && <RemindersSection reminder={settings.reminder} onChange={(reminder) => set({ reminder })} />}
+
+      {tab === 'general' && (
+      <>
       <div className="field">
         <div className="fieldLabel">{S.theme}</div>
         <div className="chips" role="group" aria-label={S.theme}>
@@ -189,6 +218,9 @@ export function SettingsSheet({ settings, onChange, onClose, backup }: Props) {
         </div>
       </div>
       <BackupSection data={backup.data} onRestore={backup.onRestore} />
+      </>
+      )}
+      </div>
     </Sheet>
   );
 }

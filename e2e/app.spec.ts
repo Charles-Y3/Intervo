@@ -122,6 +122,7 @@ test('settings: sound mode and theme persist', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Silent' }).click();
+  await page.getByRole('tab', { name: 'General' }).click();
   await page.getByRole('button', { name: 'Dark' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload();
@@ -227,4 +228,24 @@ test('default "last 3 seconds" does not count every second', async ({ page }) =>
   expect((await said(page)).map((s) => s.text)).toEqual(['Work. Go']);
   await page.clock.runFor(3_500);
   expect((await said(page)).map((s) => s.text)).toEqual(['Work. Go', '3', '2', '1']);
+});
+
+test('settings are split into tabs; each tab shows only its own controls', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const tabs = page.getByRole('tablist', { name: 'Settings sections' });
+  await expect(tabs.getByRole('tab')).toHaveText(['Sound', 'Workout', 'Reminders', 'General']);
+  await expect(tabs.getByRole('tab', { name: 'Sound' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('group', { name: 'Sound', exact: true })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Theme' })).toHaveCount(0);
+  await tabs.getByRole('tab', { name: 'Workout' }).click();
+  await expect(page.getByRole('group', { name: 'Weekly goal' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Weight unit' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Sound', exact: true })).toHaveCount(0);
+  await tabs.getByRole('tab', { name: 'Reminders' }).click();
+  await expect(page.getByTestId('reminders')).toBeVisible();
+  await tabs.getByRole('tab', { name: 'General' }).click();
+  await expect(page.getByRole('group', { name: 'Theme' })).toBeVisible();
+  await expect(page.getByLabel('Backup file')).toBeAttached();
+  await expect(page.getByTestId('reminders')).toHaveCount(0);
 });

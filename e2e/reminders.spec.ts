@@ -62,6 +62,7 @@ const subscribeCalls = (calls: Call[]) => calls.filter((c) => c.path.endsWith('/
 async function openSettings(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: 'Reminders' }).click();
 }
 
 const reminders = (page: Page) => page.getByTestId('reminders');
@@ -89,6 +90,7 @@ test.describe('with notifications allowed', () => {
     // persisted
     await page.reload();
     await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('tab', { name: 'Reminders' }).click();
     await expect(toggle(page)).toBeChecked();
   });
 
@@ -168,10 +170,12 @@ test.describe('with notifications allowed', () => {
     const file = Buffer.from(
       JSON.stringify({ app: 'intervo', version: 1, exportedAt: 1, settings: { reminder: { enabled: true, time: '05:00', days: [6] } }, state: {}, saved: [], history: [] }),
     );
+    await page.getByRole('tab', { name: 'General' }).click();
     await page.getByLabel('Backup file').setInputFiles({ name: 'b.json', mimeType: 'application/json', buffer: file });
     await page.getByRole('dialog', { name: 'Restore backup' }).getByRole('button', { name: 'Replace everything' }).click();
     await page.getByRole('dialog', { name: 'Replace everything on this phone?' }).getByRole('button', { name: 'Replace everything' }).click();
     await expect(page.getByText('Backup restored.')).toBeVisible();
+    await page.getByRole('tab', { name: 'Reminders' }).click();
     await expect(toggle(page)).not.toBeChecked(); // the schedule came back, the "on" did not
     await expect(reminders(page).getByLabel('Reminder time')).toHaveValue('05:00');
   });

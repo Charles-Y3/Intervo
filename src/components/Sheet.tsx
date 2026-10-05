@@ -10,12 +10,19 @@ const openSheets: symbol[] = [];
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const me = useRef(Symbol('sheet'));
+  // Always call the latest onClose without re-running the effects below: the parent
+  // passes a new function on every render, and re-focusing the sheet each time stole
+  // the cursor from whatever field the user was typing in.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    ref.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && openSheets[openSheets.length - 1] === me.current && onClose();
+    ref.current?.focus(); // once, when the sheet opens
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && openSheets[openSheets.length - 1] === me.current && closeRef.current();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, []);
   useEffect(() => {
     const id = me.current;
     openSheets.push(id);

@@ -773,6 +773,27 @@ button {
   margin-top: calc(-1 * var(--space-2));
 }
 
+.tabBar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: var(--color-line);
+  border-radius: var(--radius);
+  padding: 4px;
+  gap: 4px;
+}
+
+.tabBar .seg {
+  min-height: 40px;
+  font-size: var(--step--1);
+  padding: 0 var(--space-1);
+}
+
+.tabPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 /* Routine library */
 .routineList {
   list-style: none;

@@ -135,3 +135,19 @@ test('Quick tab is unchanged: form plus the Start bar', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeVisible();
   await expect(page.getByLabel('Exercise', { exact: true })).toBeVisible();
 });
+
+test('typing a whole word in the editor keeps the cursor in the field', async ({ page }) => {
+  await seedRoutines(page, [LEG_DAY]);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Edit routine: Leg day' }).click();
+  const name = page.getByLabel('Routine name');
+  await name.fill('');
+  await name.pressSequentially('Heavy legs', { delay: 30 }); // real key presses, one at a time
+  await expect(name).toHaveValue('Heavy legs');
+  await expect(name).toBeFocused();
+  const ex = page.getByLabel('Exercise name 1');
+  await ex.fill('');
+  await ex.pressSequentially('Goblet squats', { delay: 30 });
+  await expect(ex).toHaveValue('Goblet squats');
+  await expect(ex).toBeFocused();
+});
