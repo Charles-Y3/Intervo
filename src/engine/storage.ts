@@ -1,5 +1,5 @@
 import { LIMITS } from './types';
-import type { CountMode, Exercise, ReminderSettings, Routine, Settings, SoundMode, ThemeChoice, VoicePref, WeightUnit } from './types';
+import type { CountMode, Exercise, ReminderSettings, Routine, Settings, SoundMode, ThemeChoice, VoicePref, WeightUnit, DistanceUnit } from './types';
 
 /** Everything read from localStorage is untrusted (old versions, edited by
  * hand, another tab). Each sanitizer clamps or replaces bad values with
@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   units: 'kg',
   weeklyGoal: 0,
   reminder: { enabled: false, time: '18:00', days: [1, 3, 5] },
+  distanceUnit: 'km',
 };
 
 let idCounter = 0;
@@ -59,6 +60,13 @@ export function clampInt(v: unknown, min: number, max: number, fallback: number)
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+/** Distance in the user's unit: 0.01 to 999, two decimals (0.25 mi). */
+export function clampDistance(v: unknown, fallback: number): number {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.round(Math.min(LIMITS.maxDistance, Math.max(0.01, n)) * 100) / 100;
+}
+
 /** 0 = no extra weight. Keeps one decimal (2.5 kg plates). */
 export function clampWeight(v: unknown): number {
   const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
@@ -87,9 +95,10 @@ function sanitizeExercise(v: unknown, i: number): Exercise {
     id: typeof o.id === 'string' && o.id.length > 0 && o.id.length <= 40 ? o.id : newId(),
     name: cleanName(o.name, `Exercise ${i + 1}`),
     workSec: clampInt(o.workSec, 1, LIMITS.maxSeconds, 30),
-    kind: o.kind === 'reps' ? 'reps' : 'timed',
+    kind: o.kind === 'reps' ? 'reps' : o.kind === 'distance' ? 'distance' : 'timed',
     reps: clampInt(o.reps, 1, LIMITS.maxReps, 10),
     weight: clampWeight(o.weight),
+    distance: clampDistance(o.distance, 5),
   };
 }
 
@@ -144,6 +153,7 @@ export function sanitizeSettings(v: unknown): Settings {
     units: o.units === 'lb' ? ('lb' as WeightUnit) : ('kg' as WeightUnit),
     weeklyGoal: clampInt(o.weeklyGoal, 0, 7, 0),
     reminder: sanitizeReminder(o.reminder),
+    distanceUnit: o.distanceUnit === 'mi' ? ('mi' as DistanceUnit) : ('km' as DistanceUnit),
   };
 }
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { buildSteps, formatClock, hasRepSets, totalSeconds } from '../engine/plan';
 import { cleanName } from '../engine/storage';
 import { LIMITS } from '../engine/types';
-import type { Routine, WeightUnit } from '../engine/types';
+import type { DistanceUnit, Routine, WeightUnit } from '../engine/types';
 import { S } from '../strings';
 import { ConfirmSheet } from './ConfirmSheet';
 import { ExerciseList, TimingFields } from './RoutineFields';
@@ -12,6 +12,7 @@ interface Props {
   initial: Routine;
   isNew: boolean;
   unit: WeightUnit;
+  distUnit: DistanceUnit;
   onSave: (r: Routine) => void;
   onSaveAndStart: (r: Routine) => void;
   onDuplicate: (r: Routine) => void;
@@ -21,7 +22,7 @@ interface Props {
 
 /** Popup for one routine: edit everything, then Save, Save and start, Duplicate or Delete.
  * Closing with unsaved changes asks first; Delete always asks first. */
-export function RoutineEditor({ initial, isNew, unit, onSave, onSaveAndStart, onDuplicate, onDelete, onClose }: Props) {
+export function RoutineEditor({ initial, isNew, unit, distUnit, onSave, onSaveAndStart, onDuplicate, onDelete, onClose }: Props) {
   const [draft, setDraft] = useState<Routine>(initial);
   const [confirm, setConfirm] = useState<'discard' | 'delete' | null>(null);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
@@ -37,7 +38,7 @@ export function RoutineEditor({ initial, isNew, unit, onSave, onSaveAndStart, on
         <input className="textInput" aria-label={S.routineName} value={draft.name} maxLength={LIMITS.maxNameLength} onChange={(e) => patch({ name: e.target.value })} />
       </label>
 
-      <ExerciseList exercises={draft.exercises} unit={unit} onChange={(exercises) => patch({ exercises })} />
+      <ExerciseList exercises={draft.exercises} unit={unit} distUnit={distUnit} onChange={(exercises) => patch({ exercises })} />
       <TimingFields r={draft} patch={patch} multi />
 
       <ExerciseList
@@ -49,6 +50,7 @@ export function RoutineEditor({ initial, isNew, unit, onSave, onSaveAndStart, on
         maxCount={LIMITS.maxSectionExercises}
         exercises={draft.warmup ?? []}
         unit={unit}
+        distUnit={distUnit}
         onChange={(warmup) => patch({ warmup })}
       />
       <ExerciseList
@@ -60,6 +62,7 @@ export function RoutineEditor({ initial, isNew, unit, onSave, onSaveAndStart, on
         maxCount={LIMITS.maxSectionExercises}
         exercises={draft.cooldown ?? []}
         unit={unit}
+        distUnit={distUnit}
         onChange={(cooldown) => patch({ cooldown })}
       />
 

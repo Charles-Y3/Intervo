@@ -57,7 +57,7 @@ export default function App() {
   /** Log a workout; returns the new entry's id (or null if it was too short to log). */
   const log = (routine: Routine, result: RunResult, elapsedSec: number, completed: boolean): string | null => {
     if (!worthLogging(result)) return null;
-    const entry = buildEntry(routine, result, elapsedSec, completed, Date.now(), settings.units);
+    const entry = buildEntry(routine, result, elapsedSec, completed, Date.now(), settings.units, settings.distanceUnit);
     setHistory((list) => [entry, ...list].slice(0, LIMITS.maxHistory));
     return entry.id;
   };
@@ -142,6 +142,7 @@ export default function App() {
         history={history}
         goal={goal}
         unit={settings.units}
+        distUnit={settings.distanceUnit}
         onAddExamples={() => setSaved((list) => withExamples(list, LIMITS.maxSavedRoutines))}
         onState={setState}
         onStart={start}

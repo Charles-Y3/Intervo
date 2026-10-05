@@ -6,10 +6,10 @@ import { buildSteps, formatClock, hasRepSets, totalSeconds } from '../engine/pla
 import { cleanName, defaultRoutine, newId } from '../engine/storage';
 import type { AppState, Mode, RoutineSort } from '../engine/storage';
 import { LIMITS } from '../engine/types';
-import type { Exercise, Routine, WeightUnit } from '../engine/types';
+import type { DistanceUnit, Exercise, Routine, WeightUnit } from '../engine/types';
 import { S } from '../strings';
 import { GoalCard } from './GoalCard';
-import { KindToggle, RepsField } from './RepsField';
+import { DistanceField, KindToggle, RepsField } from './RepsField';
 import { RoutineEditor } from './RoutineEditor';
 import { TimingFields, WeightInput } from './RoutineFields';
 import { TimeField } from './TimeField';
@@ -21,6 +21,7 @@ interface Props {
   history: HistoryEntry[];
   goal: GoalProgress;
   unit: WeightUnit;
+  distUnit: DistanceUnit;
   onState: (s: AppState) => void;
   onStart: (r: Routine) => void;
   /** Add a new routine or replace the one with the same id. */
@@ -61,7 +62,7 @@ function copyOf(r: Routine): Routine {
   return { ...r, id: newId(), name: cleanName(`${r.name} (${S.copySuffix})`, S.defaultRoutineName), exercises: fresh(r.exercises), warmup: fresh(r.warmup), cooldown: fresh(r.cooldown) };
 }
 
-export function Setup({ state, saved, history, goal, unit, onState, onStart, onUpsert, onDeleteSaved, onAddExamples }: Props) {
+export function Setup({ state, saved, history, goal, unit, distUnit, onState, onStart, onUpsert, onDeleteSaved, onAddExamples }: Props) {
   const { mode } = state;
   const setMode = (m: Mode) => onState({ ...state, mode: m });
   // null = closed; { routine, isNew } = editor open
@@ -88,7 +89,7 @@ export function Setup({ state, saved, history, goal, unit, onState, onStart, onU
       </div>
 
       {mode === 'quick' ? (
-        <QuickSetup state={state} unit={unit} onState={onState} onStart={onStart} />
+        <QuickSetup state={state} unit={unit} distUnit={distUnit} onState={onState} onStart={onStart} />
       ) : (
         <>
           {saved.length === 0 ? (
@@ -154,6 +155,7 @@ export function Setup({ state, saved, history, goal, unit, onState, onStart, onU
           initial={editing.routine}
           isNew={editing.isNew}
           unit={unit}
+          distUnit={distUnit}
           onClose={() => setEditing(null)}
           onSave={(r) => {
             onUpsert(r);
@@ -179,7 +181,7 @@ export function Setup({ state, saved, history, goal, unit, onState, onStart, onU
 }
 
 /** Quick mode: one exercise, tweak and go. */
-function QuickSetup({ state, unit, onState, onStart }: { state: AppState; unit: WeightUnit; onState: (s: AppState) => void; onStart: (r: Routine) => void }) {
+function QuickSetup({ state, unit, distUnit, onState, onStart }: { state: AppState; unit: WeightUnit; distUnit: DistanceUnit; onState: (s: AppState) => void; onStart: (r: Routine) => void }) {
   const r = state.quick;
   const patch = (p: Partial<Routine>) => onState({ ...state, quick: { ...r, ...p } });
   const q0 = r.exercises[0];
@@ -205,9 +207,12 @@ function QuickSetup({ state, unit, onState, onStart }: { state: AppState; unit: 
       </div>
       {q0.kind === 'reps' ? (
         <RepsField value={q0.reps ?? 10} onChange={(reps) => patch({ exercises: [{ ...q0, reps }] })} />
+      ) : q0.kind === 'distance' ? (
+        <DistanceField value={q0.distance ?? 5} unit={distUnit} onChange={(distance) => patch({ exercises: [{ ...q0, distance }] })} />
       ) : (
         <TimeField label={S.work} big value={q0.workSec} presets={WORK_PRESETS} onChange={(sec) => patch({ exercises: [{ ...q0, workSec: sec }] })} />
       )}
+      {q0.kind !== 'distance' && (
       <div className="field">
         <div className="fieldHead">
           <span className="fieldLabel">{S.weightField}</span>
@@ -215,6 +220,7 @@ function QuickSetup({ state, unit, onState, onStart }: { state: AppState; unit: 
         <WeightInput value={q0.weight ?? 0} unit={unit} label={S.weightField} onChange={(weight) => patch({ exercises: [{ ...q0, weight }] })} />
         <p className="muted">{S.weightHint(unit)}</p>
       </div>
+      )}
 
       <TimingFields r={r} patch={patch} multi={false} />
 

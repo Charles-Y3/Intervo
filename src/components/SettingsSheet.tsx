@@ -190,6 +190,17 @@ export function SettingsSheet({ settings, onChange, onClose, backup }: Props) {
       </div>
 
       <div className="field">
+        <div className="fieldLabel">{S.distanceUnitLabel}</div>
+        <div className="chips" role="group" aria-label={S.distanceUnitLabel}>
+          {(['km', 'mi'] as const).map((u) => (
+            <button key={u} className={`chip${settings.distanceUnit === u ? ' chipOn' : ''}`} aria-pressed={settings.distanceUnit === u} onClick={() => set({ distanceUnit: u })}>
+              {u}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="field">
         <div className="fieldLabel">{S.units}</div>
         <div className="chips" role="group" aria-label={S.units}>
           {(['kg', 'lb'] as const).map((u) => (

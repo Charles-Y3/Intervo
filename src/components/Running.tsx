@@ -85,9 +85,19 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
   // A reps set has no countdown: count what is left of its estimate (never below 0).
   const currentLeft = untimed ? Math.max(0, step.durationSec - runner.elapsedSec()) : runner.remainingMs() / 1000;
   const leftTotal = steps.slice(runner.index + 1).reduce((a, s) => a + s.durationSec, 0) + currentLeft;
-  const anyReps = steps.some((s) => s.reps !== undefined);
-  const repsNow = untimed ? (adj && adj.idx === runner.index ? adj.n : (step.reps ?? 0)) : 0;
-  const setReps = (n: number) => setAdj({ idx: runner.index, n: Math.min(LIMITS.maxReps, Math.max(0, n)) });
+  const anyReps = steps.some((s) => s.reps !== undefined || s.distance !== undefined);
+  const isDistance = step.distance !== undefined;
+  const repsNow = untimed ? (adj && adj.idx === runner.index ? adj.n : (step.reps ?? step.distance ?? 0)) : 0;
+  // Reps move in whole numbers, distances in hundredths.
+  const setReps = (n: number) =>
+    setAdj({
+      idx: runner.index,
+      n: isDistance ? Math.min(LIMITS.maxDistance, Math.max(0, Math.round(n * 100) / 100)) : Math.min(LIMITS.maxReps, Math.max(0, Math.round(n))),
+    });
+  const unitLabel = settings.distanceUnit;
+  const elapsed = untimed ? runner.elapsedSec() : 0;
+  const paceSec = isDistance && repsNow > 0 && elapsed >= 1 ? Math.round(elapsed / repsNow) : 0;
+  const shownAmount = isDistance ? String(Math.round(repsNow * 100) / 100) : String(repsNow);
   const workSteps = steps.filter((s) => s.kind === 'work');
   const currentWorkNo = steps.slice(0, runner.index + 1).filter((s) => s.kind === 'work').length;
   const phaseName = phase === 'prep' ? S.prep : phase === 'work' ? S.workPhase : S.restPhase;
@@ -111,19 +121,34 @@ export function Running({ routine, settings, onFinish, onExit }: Props) {
       {untimed ? (
         <div className="repsPanel" data-testid="reps-panel">
           <div className="repsBig" data-testid="reps-now" aria-live="polite">
-            {repsNow}
+            {shownAmount}
           </div>
-          <div className="repsUnit">{S.repsUnit}</div>
+          <div className="repsUnit">{isDistance ? unitLabel : S.repsUnit}</div>
+          {isDistance && (
+            <div className="repsClock" data-testid="dist-pace">
+              {paceSec > 0 ? `${S.paceLabel} ${formatClock(paceSec)} /${unitLabel}` : ' '}
+            </div>
+          )}
           <div className="repsAdjust">
-            <button className="roundBtn" onClick={() => setReps(repsNow - 1)} aria-label={S.repsMinus}>
-              −
+            {isDistance && (
+              <button className="roundBtn roundBtnSmall" onClick={() => setReps(repsNow - 1)} aria-label={S.distLess1(unitLabel)}>
+                −1
+              </button>
+            )}
+            <button className="roundBtn roundBtnSmall" onClick={() => setReps(repsNow - (isDistance ? 0.1 : 1))} aria-label={isDistance ? S.distLess01(unitLabel) : S.repsMinus}>
+              {isDistance ? '−.1' : '−'}
             </button>
             <span className="repsClock" data-testid="reps-clock" aria-label={S.repsSetTime}>
               {formatClock(Math.floor(runner.elapsedSec()))}
             </span>
-            <button className="roundBtn" onClick={() => setReps(repsNow + 1)} aria-label={S.repsPlus}>
-              +
+            <button className="roundBtn roundBtnSmall" onClick={() => setReps(repsNow + (isDistance ? 0.1 : 1))} aria-label={isDistance ? S.distMore01(unitLabel) : S.repsPlus}>
+              {isDistance ? '+.1' : '+'}
             </button>
+            {isDistance && (
+              <button className="roundBtn roundBtnSmall" onClick={() => setReps(repsNow + 1)} aria-label={S.distMore1(unitLabel)}>
+                +1
+              </button>
+            )}
           </div>
         </div>
       ) : (

@@ -112,9 +112,9 @@ describe('weight', () => {
 
   it('charts the heaviest weight per period', () => {
     const mk = (id: string, day: number, w: number): HistoryEntry => ({
-      id, routineId: 'x', unit: 'kg', note: '', at: new Date(2026, 9, day, 9).getTime(), routineName: 'Pull', mode: 'routine', rounds: 1,
+      id, routineId: 'x', unit: 'kg', distUnit: 'km', note: '', at: new Date(2026, 9, day, 9).getTime(), routineName: 'Pull', mode: 'routine', rounds: 1,
       roundsDone: 1, totalSec: 60, workSec: 30, completed: true,
-      exercises: [{ name: 'Pull-ups', sets: 3, workSec: 30, longestSec: 0, reps: 24, bestReps: 8, weight: w }],
+      exercises: [{ name: 'Pull-ups', sets: 3, workSec: 30, longestSec: 0, reps: 24, bestReps: 8, weight: w, distance: 0, distanceSec: 0 }],
     });
     const b = bucketize([mk('1', 1, 0), mk('2', 8, 5), mk('3', 15, 7.5)], NO_FILTERS, 'week', 'weight');
     expect(b.map((x) => x.value)).toEqual([0, 5, 7.5]);
@@ -215,7 +215,7 @@ describe('extra set', () => {
 });
 
 const entry = (id: string, at: number, over: Partial<HistoryEntry> = {}): HistoryEntry => ({
-  id, routineId: 'rt', unit: 'kg', note: '', at, routineName: 'Leg day', mode: 'routine', rounds: 3, roundsDone: 3, totalSec: 600,
+  id, routineId: 'rt', unit: 'kg', distUnit: 'km', note: '', at, routineName: 'Leg day', mode: 'routine', rounds: 3, roundsDone: 3, totalSec: 600,
   workSec: 300, completed: true, exercises: [], ...over,
 });
 
@@ -233,7 +233,7 @@ describe('routine identity in the log', () => {
     const [e] = sanitizeHistory([{ id: 'x', at: Date.UTC(2026, 9, 5), routineId: 'abc', unit: 'lb', note: 'felt strong‮', exercises: [] }]);
     expect(e).toMatchObject({ routineId: 'abc', unit: 'lb', note: 'felt strong' });
     const [old] = sanitizeHistory([{ id: 'y', at: Date.UTC(2026, 9, 5), routineName: 'Old', exercises: [] }]);
-    expect(old).toMatchObject({ routineId: '', unit: 'kg', note: '' });
+    expect(old).toMatchObject({ routineId: '', unit: 'kg', distUnit: 'km', note: '' });
     expect(sanitizeHistory([{ id: 'z', at: Date.UTC(2026, 9, 5), note: 'x'.repeat(900) }])[0].note).toHaveLength(300);
   });
 });

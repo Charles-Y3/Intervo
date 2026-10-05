@@ -4,6 +4,7 @@ import {
   defaultGroup,
   exerciseNames,
   filterEntries,
+  hasDistanceData,
   hasRepData,
   hasWeightData,
   parseDay,
@@ -54,7 +55,17 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
   const dirty = routine !== '' || exercise !== '' || preset !== '30';
 
   const unit = entries[0]?.unit ?? 'kg';
-  const format = (v: number) => (metric === 'time' || metric === 'longest' ? formatShort(v) : metric === 'weight' ? `${v} ${unit}` : String(Math.round(v)));
+  const dUnit = entries[0]?.distUnit ?? 'km';
+  const format = (v: number) =>
+    metric === 'time' || metric === 'longest'
+      ? formatShort(v)
+      : metric === 'weight'
+        ? `${v} ${unit}`
+        : metric === 'distance'
+          ? `${Math.round(v * 100) / 100} ${dUnit}`
+          : metric === 'pace'
+            ? `${formatClock(v)} /${dUnit}`
+            : String(Math.round(v));
   const repData = hasRepData(entries);
   const metrics: [Metric, string][] = [
     ['time', S.metricTime],
@@ -63,6 +74,7 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
     ['sessions', S.metricSessions],
     ...(repData ? ([['reps', S.metricReps], ['bestReps', S.metricBestReps]] as [Metric, string][]) : []),
     ...(hasWeightData(entries) ? ([['weight', S.metricWeight]] as [Metric, string][]) : []),
+    ...(hasDistanceData(entries) ? ([['distance', S.metricDistance], ['pace', S.metricPace]] as [Metric, string][]) : []),
   ];
   const presets: [RangePreset, string][] = [
     ['7', S.last7],
@@ -92,7 +104,7 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
         </p>
       ) : (
         <>
-          <div className={sum.reps > 0 ? 'stats3 stats4' : 'stats3'}>
+          <div className={`stats3${(sum.reps > 0 ? 1 : 0) + (sum.distance > 0 ? 1 : 0) === 2 ? ' stats5' : sum.reps > 0 || sum.distance > 0 ? ' stats4' : ''}`}>
             <div className="stat">
               <span className="muted">{S.statWorkouts}</span>
               <strong data-testid="stat-workouts">{sum.sessions}</strong>
@@ -105,6 +117,12 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
               <span className="muted">{S.statSets}</span>
               <strong>{sum.sets}</strong>
             </div>
+            {sum.distance > 0 && (
+              <div className="stat">
+                <span className="muted">{S.statDistance}</span>
+                <strong data-testid="stat-distance">{sum.distance}</strong>
+              </div>
+            )}
             {sum.reps > 0 && (
               <div className="stat">
                 <span className="muted">{S.statReps}</span>
@@ -218,7 +236,7 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
               group={group}
               format={format}
               metricLabel={metrics.find((m) => m[0] === metric)![1]}
-              isTime={metric === 'time' || metric === 'longest'}
+              isTime={metric === 'time' || metric === 'longest' || metric === 'pace'}
             />
           </section>
 
@@ -246,9 +264,11 @@ export function History({ entries, onDelete, onClear, onBack }: Props) {
                       {e.exercises
                         .filter((s) => !exercise || s.name.toLowerCase() === exercise.toLowerCase())
                         .map((s) =>
-                          (s.reps > 0
-                            ? `${s.name} ${s.reps} ${S.repsUnit} · ${s.sets} sets (best ${s.bestReps})`
-                            : `${s.name} ×${s.sets}${s.longestSec ? ` (${formatShort(s.longestSec)})` : ''}`) +
+                          (s.distance > 0
+                            ? `${s.name} ${s.distance} ${e.distUnit} in ${formatClock(s.distanceSec)}${s.distanceSec > 0 ? ` (${formatClock(Math.round(s.distanceSec / s.distance))}/${e.distUnit})` : ''}`
+                            : s.reps > 0
+                              ? `${s.name} ${s.reps} ${S.repsUnit} · ${s.sets} sets (best ${s.bestReps})`
+                              : `${s.name} ×${s.sets}${s.longestSec ? ` (${formatShort(s.longestSec)})` : ''}`) +
                           (s.weight > 0 ? ` +${s.weight} ${e.unit}` : ''),
                         )
                         .join(' · ')}

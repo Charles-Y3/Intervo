@@ -54,7 +54,13 @@ function rawCue(ev: RunEvent, steps: Step[], settings: Settings): Cue | null {
         }
         case 'work': {
           const firstOfRound = !step.section && step.exerciseIndex === 0 && step.round > 1 && multiRound;
-          const what = step.reps !== undefined ? `${step.label}. ${step.reps} ${step.reps === 1 ? 'rep' : 'reps'}` : step.label;
+          const unitWord = (n: number) => (settings.distanceUnit === 'mi' ? (n === 1 ? 'mile' : 'miles') : n === 1 ? 'kilometer' : 'kilometers');
+          const what =
+            step.reps !== undefined
+              ? `${step.label}. ${step.reps} ${step.reps === 1 ? 'rep' : 'reps'}`
+              : step.distance !== undefined
+                ? `${step.label}. ${step.distance} ${unitWord(step.distance)}`
+                : step.label;
           const lead = step.section && step.exerciseIndex === 0 ? (step.section === 'warmup' ? 'Warm-up. ' : 'Cool-down. ') : '';
           return {
             speech: lead + (firstOfRound ? `Round ${step.round}. ${what}. Go` : `${what}. Go`),

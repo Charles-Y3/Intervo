@@ -30,7 +30,7 @@ export class Runner {
 
   /** The current step has no countdown: it ends when the user taps Done. */
   get untimed(): boolean {
-    return this.step.reps !== undefined;
+    return this.step.reps !== undefined || this.step.distance !== undefined;
   }
 
   get paused(): boolean {
@@ -103,11 +103,12 @@ export class Runner {
     return [{ type: 'stepStart', index: this.index }];
   }
 
-  /** User tapped Done on a reps set: log the reps and move on (or finish). */
-  completeSet(reps: number): RunEvent[] {
+  /** User tapped Done on a reps or distance set: log the amount and move on (or finish). */
+  completeSet(amount: number): RunEvent[] {
     if (this.done || !this.untimed) return [];
     this.snap();
-    this.repsDone[this.index] = Math.max(0, Math.round(reps));
+    // Reps are whole numbers; distances keep two decimals.
+    this.repsDone[this.index] = this.step.distance !== undefined ? Math.max(0, Math.round(amount * 100) / 100) : Math.max(0, Math.round(amount));
     this.setDone[this.index] = true;
     if (this.index >= this.steps.length - 1) return this.finish();
     this.goto(this.index + 1);
@@ -202,12 +203,14 @@ export class Runner {
       .map(({ st, i }) => ({
         name: st.label,
         round: st.round,
-        plannedSec: st.reps !== undefined ? 0 : st.durationSec,
+        plannedSec: st.reps !== undefined || st.distance !== undefined ? 0 : st.durationSec,
         sec: Math.round(this.best[i] * 10) / 10,
-        complete: st.reps !== undefined ? this.setDone[i] : this.best[i] >= st.durationSec - 0.05,
+        complete: st.reps !== undefined || st.distance !== undefined ? this.setDone[i] : this.best[i] >= st.durationSec - 0.05,
         targetReps: st.reps ?? 0,
         reps: st.reps !== undefined ? this.repsDone[i] : 0,
         weight: st.weight ?? 0,
+        targetDistance: st.distance ?? 0,
+        distance: st.distance !== undefined ? this.repsDone[i] : 0,
         section: st.section,
         extra: st.extra === true,
       }));

@@ -59,7 +59,7 @@ export interface SeedEntry {
   routineName: string;
   completed?: boolean;
   note?: string;
-  exercises?: { name: string; sets?: number; workSec?: number; longestSec?: number; reps?: number; bestReps?: number; weight?: number }[];
+  exercises?: { name: string; sets?: number; workSec?: number; longestSec?: number; reps?: number; bestReps?: number; weight?: number; distance?: number; distanceSec?: number }[];
 }
 
 /** Seed the workout log (only if empty). */
@@ -83,7 +83,7 @@ export async function seedHistory(page: Page, entries: SeedEntry[]) {
           totalSec: 600,
           workSec: 300,
           completed: e.completed ?? true,
-          exercises: (e.exercises ?? []).map((x) => ({ sets: 3, workSec: 90, longestSec: 30, reps: 0, bestReps: 0, weight: 0, ...x })),
+          exercises: (e.exercises ?? []).map((x) => ({ sets: 3, workSec: 90, longestSec: 30, reps: 0, bestReps: 0, weight: 0, distance: 0, distanceSec: 0, ...x })),
         })),
       ),
     );

@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { formatShort } from '../engine/plan';
 import { cleanName, clampWeight, newId } from '../engine/storage';
 import { LIMITS } from '../engine/types';
-import type { Exercise, Routine, WeightUnit } from '../engine/types';
+import type { DistanceUnit, Exercise, Routine, WeightUnit } from '../engine/types';
 import { S } from '../strings';
 import { ConfirmSheet } from './ConfirmSheet';
-import { KindToggle, RepsInput } from './RepsField';
+import { DistanceInput, KindToggle, RepsInput } from './RepsField';
 import { NumberPad, TimeField } from './TimeField';
 
 const ROUND_REST_PRESETS = [30, 60, 120, 180];
@@ -86,6 +86,7 @@ interface ListProps {
   exercises: Exercise[];
   onChange: (e: Exercise[]) => void;
   unit: WeightUnit;
+  distUnit: DistanceUnit;
   /** Heading (default: Exercises). */
   title?: string;
   /** Prefix of each name field's accessible label, so lists stay distinguishable. */
@@ -103,6 +104,7 @@ export function ExerciseList({
   exercises,
   onChange,
   unit,
+  distUnit,
   title = S.exercises,
   namePrefix = S.exerciseName,
   addLabel = S.addExercise,
@@ -195,6 +197,8 @@ export function ExerciseList({
             />
             {ex.kind === 'reps' ? (
               <RepsInput className="exTime" value={ex.reps ?? 10} label={`${ex.name}: ${S.repsTyped}`} onChange={(reps) => update(ex.id, { reps })} />
+            ) : ex.kind === 'distance' ? (
+              <DistanceInput className="exTime" value={ex.distance ?? 5} unit={distUnit} label={S.distanceInputLabel(ex.name, distUnit)} onChange={(distance) => update(ex.id, { distance })} />
             ) : (
               <button className="btn exTime" onClick={() => setPadFor(ex.id)} aria-label={`${ex.name}: ${formatShort(ex.workSec)}. ${S.enterTime}`}>
                 {formatShort(ex.workSec)}
@@ -202,7 +206,9 @@ export function ExerciseList({
             )}
             <div className="exExtras">
               <KindToggle compact value={ex.kind ?? 'timed'} onChange={(kind) => update(ex.id, { kind })} />
-              <WeightInput value={ex.weight ?? 0} unit={unit} label={S.weightLabel(ex.name, unit)} onChange={(weight) => update(ex.id, { weight })} />
+              {ex.kind !== 'distance' && (
+                <WeightInput value={ex.weight ?? 0} unit={unit} label={S.weightLabel(ex.name, unit)} onChange={(weight) => update(ex.id, { weight })} />
+              )}
               <button
                 className="iconBtn"
                 onClick={() => setRemoving(ex)}

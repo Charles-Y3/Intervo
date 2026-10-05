@@ -6,6 +6,8 @@ import type { Exercise, Routine, Section, Step } from './types';
  * work step. A rest of 0 seconds is skipped entirely. */
 /** Rough seconds per rep, only used for the "total" estimate of rep sets. */
 export const SEC_PER_REP_ESTIMATE = 3;
+/** Rough seconds per km or mile (a 6 minute pace), only for the "total" estimate of distance sets. */
+export const SEC_PER_DISTANCE_ESTIMATE = 360;
 
 function workStep(ex: Exercise, round: number, exerciseIndex: number, section?: Section): Step {
   const base: Step = { kind: 'work', durationSec: ex.workSec, label: ex.name, round, exerciseIndex };
@@ -13,6 +15,11 @@ function workStep(ex: Exercise, round: number, exerciseIndex: number, section?: 
     const reps = ex.reps ?? 10;
     base.durationSec = reps * SEC_PER_REP_ESTIMATE;
     base.reps = reps;
+  }
+  if (ex.kind === 'distance') {
+    const distance = ex.distance ?? 5;
+    base.durationSec = Math.round(distance * SEC_PER_DISTANCE_ESTIMATE);
+    base.distance = distance;
   }
   if (section) base.section = section;
   if (ex.weight !== undefined && ex.weight > 0) base.weight = ex.weight;
@@ -58,7 +65,7 @@ export function buildSteps(r: Routine): Step[] {
 }
 
 export function hasRepSets(steps: Step[]): boolean {
-  return steps.some((s) => s.reps !== undefined);
+  return steps.some((s) => s.reps !== undefined || s.distance !== undefined);
 }
 
 export function totalSeconds(steps: Step[]): number {

@@ -944,6 +944,21 @@ button {
   border-color: #fff;
 }
 
+.roundBtnSmall {
+  width: 52px;
+  height: 52px;
+  font-size: 1.1rem;
+}
+
+.stats5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.stats5 .stat {
+  padding: var(--space-2);
+  font-size: var(--step--1);
+}
+
 /* Confirm + history */
 .confirmText {
   margin: 0;

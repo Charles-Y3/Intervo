@@ -1,7 +1,8 @@
-export type ExerciseKind = 'timed' | 'reps';
+export type ExerciseKind = 'timed' | 'reps' | 'distance';
 /** Optional blocks played once before round 1 / after the last round. */
 export type Section = 'warmup' | 'cooldown';
 export type WeightUnit = 'kg' | 'lb';
+export type DistanceUnit = 'km' | 'mi';
 
 export interface Exercise {
   id: string;
@@ -14,6 +15,8 @@ export interface Exercise {
   reps?: number;
   /** Extra weight (or 0 / undefined for none), in the unit chosen in Settings. */
   weight?: number;
+  /** Target distance for run/walk exercises, in the distance unit chosen in Settings. */
+  distance?: number;
 }
 
 /** One workout. Quick mode is a Routine with a single exercise. */
@@ -45,6 +48,8 @@ export interface Step {
   /** Target reps. Present = an untimed set that ends when the user taps Done;
    * durationSec is then only an estimate for the "total" line. */
   reps?: number;
+  /** Target distance. Like reps, makes an untimed set that ends when the user taps Done. */
+  distance?: number;
   /** Set for warm-up and cool-down steps (not part of the numbered rounds). */
   section?: Section;
   /** Extra weight for this set, if any. */
@@ -85,6 +90,7 @@ export interface Settings {
   /** Workouts per week to aim for; 0 = no goal. */
   weeklyGoal: number;
   reminder: ReminderSettings;
+  distanceUnit: DistanceUnit;
 }
 
 export type RunEvent =
@@ -102,6 +108,7 @@ export const LIMITS = {
   maxSavedRoutines: 50,
   maxHistory: 1000,
   maxReps: 999,
+  maxDistance: 999,
   maxSectionExercises: 10,
   maxWeight: 999,
   maxNote: 300,
@@ -122,6 +129,9 @@ export interface RunResult {
     reps: number;
     /** Extra weight used (0 = none). */
     weight: number;
+    /** Distance sets: target and the distance the user confirmed (0 if skipped). 0/0 otherwise. */
+    targetDistance: number;
+    distance: number;
     section?: Section;
     extra: boolean;
   }[];

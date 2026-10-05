@@ -1,6 +1,6 @@
-import { cleanName, cleanText, clampInt, clampWeight, newId } from './storage';
+import { cleanName, cleanText, clampDistance, clampInt, clampWeight, newId } from './storage';
 import { LIMITS } from './types';
-import type { Routine, RunResult, WeightUnit } from './types';
+import type { DistanceUnit, Routine, RunResult, WeightUnit } from './types';
 
 /** The workout log. One entry per workout, finished or ended early. Pure
  * functions only (filtering, grouping, chart data) so they are unit tested;
@@ -21,6 +21,10 @@ export interface ExerciseStat {
   bestReps: number;
   /** Heaviest extra weight used (0 = none). */
   weight: number;
+  /** Total distance of run/walk sets, in the entry's distance unit. */
+  distance: number;
+  /** Seconds spent on the completed distance sets (distance / this = pace). */
+  distanceSec: number;
 }
 
 export interface HistoryEntry {
@@ -29,6 +33,8 @@ export interface HistoryEntry {
   routineId: string;
   /** Unit of the weights in this entry. */
   unit: WeightUnit;
+  /** Unit of the distances in this entry. */
+  distUnit: DistanceUnit;
   /** Optional note typed on the finish screen. */
   note: string;
   /** Epoch ms when the workout ended. */
@@ -53,17 +59,22 @@ export function buildEntry(
   completed: boolean,
   at: number,
   unit: WeightUnit = 'kg',
+  distUnit: DistanceUnit = 'km',
 ): HistoryEntry {
   const byName = new Map<string, ExerciseStat>();
   for (const w of result.work) {
     const k = key(w.name);
-    const stat = byName.get(k) ?? { name: w.name, sets: 0, workSec: 0, longestSec: 0, reps: 0, bestReps: 0, weight: 0 };
+    const stat = byName.get(k) ?? { name: w.name, sets: 0, workSec: 0, longestSec: 0, reps: 0, bestReps: 0, weight: 0, distance: 0, distanceSec: 0 };
     stat.workSec += w.sec;
     if (w.complete) {
       stat.sets += 1;
       stat.longestSec = Math.max(stat.longestSec, w.plannedSec);
     }
     stat.weight = Math.max(stat.weight, w.weight);
+    if (w.targetDistance > 0) {
+      stat.distance = Math.round((stat.distance + w.distance) * 100) / 100;
+      if (w.complete) stat.distanceSec += Math.round(w.sec);
+    }
     if (w.targetReps > 0) {
       stat.reps += w.reps;
       stat.bestReps = Math.max(stat.bestReps, w.reps);
@@ -75,6 +86,7 @@ export function buildEntry(
     id: newId(),
     routineId: routine.id,
     unit,
+    distUnit,
     note: '',
     at,
     routineName: routine.name,
@@ -91,6 +103,10 @@ export function buildEntry(
 /** Does any entry contain rep-based sets? Decides whether the rep metrics are offered. */
 export function hasRepData(entries: HistoryEntry[]): boolean {
   return entries.some((e) => e.exercises.some((s) => s.reps > 0));
+}
+
+export function hasDistanceData(entries: HistoryEntry[]): boolean {
+  return entries.some((e) => e.exercises.some((s) => s.distance > 0));
 }
 
 export function hasWeightData(entries: HistoryEntry[]): boolean {
@@ -118,6 +134,8 @@ function sanitizeStat(v: unknown, i: number): ExerciseStat {
     reps: clampInt(o.reps, 0, 999999, 0),
     bestReps: clampInt(o.bestReps, 0, LIMITS.maxReps, 0),
     weight: clampWeight(o.weight),
+    distance: clampDistance(o.distance, 0) === 0 ? 0 : clampDistance(o.distance, 0),
+    distanceSec: clampInt(o.distanceSec, 0, 999999, 0),
   };
 }
 
@@ -138,6 +156,7 @@ export function sanitizeHistory(v: unknown): HistoryEntry[] {
       id,
       routineId: typeof item.routineId === 'string' && item.routineId.length <= 40 ? item.routineId : '',
       unit: item.unit === 'lb' ? 'lb' : 'kg',
+      distUnit: item.distUnit === 'mi' ? 'mi' : 'km',
       note: cleanText(item.note, '', LIMITS.maxNote),
       at,
       routineName: cleanName(item.routineName, 'Workout'),
@@ -233,7 +252,7 @@ export function exerciseNames(entries: HistoryEntry[]): string[] {
 }
 
 /** The numbers an entry contributes: just the chosen exercise, or everything. */
-export function statsFor(e: HistoryEntry, exercise: string): { workSec: number; sets: number; longestSec: number; reps: number; bestReps: number; weight: number } {
+export function statsFor(e: HistoryEntry, exercise: string): { workSec: number; sets: number; longestSec: number; reps: number; bestReps: number; weight: number; distance: number; distanceSec: number } {
   const ex = key(exercise);
   const list = ex ? e.exercises.filter((s) => key(s.name) === ex) : e.exercises;
   return {
@@ -243,6 +262,8 @@ export function statsFor(e: HistoryEntry, exercise: string): { workSec: number; 
     reps: list.reduce((a, s) => a + s.reps, 0),
     bestReps: list.reduce((a, s) => Math.max(a, s.bestReps), 0),
     weight: list.reduce((a, s) => Math.max(a, s.weight), 0),
+    distance: Math.round(list.reduce((a, s) => a + s.distance, 0) * 100) / 100,
+    distanceSec: list.reduce((a, s) => a + s.distanceSec, 0),
   };
 }
 
@@ -251,25 +272,28 @@ export interface Summary {
   workSec: number;
   sets: number;
   reps: number;
+  distance: number;
 }
 
 export function summarize(entries: HistoryEntry[], exercise: string): Summary {
   let workSec = 0;
   let sets = 0;
   let reps = 0;
+  let distance = 0;
   for (const e of entries) {
     const s = statsFor(e, exercise);
     workSec += s.workSec;
     sets += s.sets;
     reps += s.reps;
+    distance += s.distance;
   }
-  return { sessions: entries.length, workSec, sets, reps };
+  return { sessions: entries.length, workSec, sets, reps, distance: Math.round(distance * 100) / 100 };
 }
 
 // ---- chart data ----
 
 export type Group = 'day' | 'week' | 'month';
-export type Metric = 'time' | 'sets' | 'longest' | 'sessions' | 'reps' | 'bestReps' | 'weight';
+export type Metric = 'time' | 'sets' | 'longest' | 'sessions' | 'reps' | 'bestReps' | 'weight' | 'distance' | 'pace';
 
 export interface Bucket {
   /** Sort/ID key: YYYY-MM-DD (day, week start) or YYYY-MM. */
@@ -312,6 +336,7 @@ export function bucketize(entries: HistoryEntry[], f: Filters, group: Group, met
   const hi = f.to && parseDay(f.to) ? parseDay(f.to)!.getTime() : Math.max(...times);
 
   const map = new Map<string, number>();
+  const paceSec = new Map<string, number>(); // seconds on distance sets, for pace
   for (const e of entries) {
     const k = bucketKey(group, startOf(group, e.at));
     const s = statsFor(e, f.exercise);
@@ -322,6 +347,11 @@ export function bucketize(entries: HistoryEntry[], f: Filters, group: Group, met
     else if (metric === 'reps') map.set(k, cur + s.reps);
     else if (metric === 'bestReps') map.set(k, Math.max(cur, s.bestReps));
     else if (metric === 'weight') map.set(k, Math.max(cur, s.weight));
+    else if (metric === 'distance') map.set(k, Math.round((cur + s.distance) * 100) / 100);
+    else if (metric === 'pace') {
+      map.set(k, cur + s.distance); // distance so far
+      paceSec.set(k, (paceSec.get(k) ?? 0) + s.distanceSec);
+    }
     else map.set(k, Math.max(cur, s.longestSec));
   }
 
@@ -329,7 +359,10 @@ export function bucketize(entries: HistoryEntry[], f: Filters, group: Group, met
   const end = startOf(group, Math.max(hi, lo)).getTime();
   for (let d = startOf(group, Math.min(lo, hi)); d.getTime() <= end && out.length < 5000; d = next(group, d)) {
     const k = bucketKey(group, d);
-    out.push({ key: k, start: d.getTime(), value: map.get(k) ?? 0 });
+    const raw = map.get(k) ?? 0;
+    // Pace = seconds per distance unit over the period (lower is faster); 0 when nothing was run.
+    const value = metric === 'pace' ? (raw > 0 ? Math.round((paceSec.get(k) ?? 0) / raw) : 0) : raw;
+    out.push({ key: k, start: d.getTime(), value });
   }
   return out.slice(-MAX_BUCKETS);
 }
